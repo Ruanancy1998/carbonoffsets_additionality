@@ -1,0 +1,2796 @@
+---
+title: "OffsetProject"
+output: html_document
+date: "2023-11-08"
+editor_options: 
+  chunk_output_type: console
+---
+
+
+## Carbon Offsets without Additionality Tests
+
+```{r Load Data, Libraries and Functions}
+
+setwd("/Users/nancy/Library/CloudStorage/Dropbox-个人/CarbonOffsetsAdditionality")
+getwd()
+
+#Load Libraries
+source("./Code/Load Libraries.R")
+
+#Load Functions
+source("./Code/Load Functions.R")
+
+#Load Maps
+source("./Code/Load Map.R")
+
+#Clean Raw Data and Correct typos
+#source("./Code/Clean Data.R")
+
+#Load Clean Data
+source("./Code/Load Data.R")
+
+```
+
+
+# Offset Programmes
+
+```{r five offset registries: CDM, VCS, GS, ACR, CAR}
+
+country_projectcounts <- offsets_projects %>%
+  group_by(Country) %>%
+  summarise(project_count = n())
+
+country_creditcounts <- offsets_projects %>%
+  group_by(Country) %>%
+  summarise(credit_count = sum(`Total Credits Issued`, na.rm = TRUE))
+
+world_map <- world %>%
+  left_join(country_projectcounts, by = c("admin" = "Country"))
+
+world_map <- world_map %>%
+  left_join(country_creditcounts, by = c("admin" = "Country"))
+
+
+# The number of carbon offset projects
+
+map1 <- ggplot(data = world_map) +
+  geom_sf(aes(fill = project_count), color = "black") +
+  scale_fill_gradient(
+    low = "#e0f3db",  # 浅绿色
+    high = "#00441b", # 深绿色
+    na.value = "gray85", # 缺失值的颜色
+    name = "Projects"
+  ) +
+  labs(
+     title = "The number of carbon offset projects"
+  ) +
+  theme_classic() 
+map1
+ggsave("./Figures/map1.pdf", plot = map1, width = 9, height = 6, dpi = 300)
+
+
+
+# The number of carbon offset credits
+
+map2 <- ggplot(data = world_map) +
+  geom_sf(aes(fill = credit_count), color = "black") +
+  scale_fill_gradient(
+    low = "#fde0dd",  # 浅粉红色
+    high = "#67000d",
+    na.value = "gray85", # 缺失值的颜色
+    name = "Credits"
+  ) +
+  labs(
+     title = "The number of carbon offset credits"
+  ) +
+  theme_classic()
+map2
+ggsave("./Figures/map2.pdf", plot = map2, width = 9, height = 6, dpi = 300)
+
+custom_colors <- c(
+  "ACR" = "#FFA07A",   # orange
+  "CAR" = "#FDD875",     # yellow
+  "CDM" = "#C1A68D",       # brown
+  "GOLD" = "#78A8D6", # blue
+  "VCS" = "#8F78B5" # purple
+)
+
+custom_colors_1 <- c(
+  "Brazil" = "#c4e4c9", 
+  "United States" = "#a7d7b7", 
+  "India" = "#4daf4a",
+  "China" = "#005a11",
+  "Others" = "#e1f1cc"
+)
+
+# number of registered projects by major countries
+
+trend1 <- ggplot(data = country_projectcounts_year_0424, aes(
+  x = `Issuance Year`,
+  y = project_count,
+  fill = Country
+)) +
+  geom_area(alpha = 1) +
+  scale_fill_manual(values = custom_colors_1) +
+  scale_x_continuous(
+    breaks = seq(2004, 2024, by = 2)
+  ) +
+  labs(
+    x = "First issuance year",
+    y = "Number of registered projects"
+  ) +
+  theme_classic() + 
+  theme(
+    text = element_text(size = 12), 
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5), 
+    axis.line = element_line(size = 0.5),
+    axis.ticks = element_line(size = 0.5),
+    legend.position = "none",
+    strip.background = element_blank(),
+    strip.text = element_text(size = 11.5, hjust = 0)
+  ) +
+  facet_wrap(~Country, ncol = 1, scales = "free_y")
+print(trend1)
+ggsave("./Figures/trend1.pdf", plot = trend1, width = 8, height = 7, dpi = 300)
+
+
+
+# number of issued offsets (in millions)
+
+trend2 <- ggplot(data = creditcounts_year_registry_0424, aes(
+  x = `Issuance Year`,
+  y = credit_count,
+  fill = Registry
+)) +
+  geom_area(alpha = 0.9) +
+  scale_fill_manual(values = custom_colors) +
+  scale_x_continuous(
+    breaks = seq(2004, 2024, by = 2)
+  ) +
+  scale_y_continuous(
+    labels = scales::label_number(scale = 1e-6, suffix = ""),
+    expand = c(0, 0)
+  ) +
+  labs(
+    x = "Issuance year",
+    y = "Number of issued offsets (in millions)",
+    fill = "Registry"
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(size = 12),
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    axis.line = element_line(size = 0.5),
+    axis.ticks = element_line(size = 0.5),
+    legend.position = "none", 
+    strip.background = element_blank(),
+    strip.text = element_text(size = 11.5, hjust = 0)
+  ) +
+  facet_wrap(~Registry, ncol = 1, scales = "free_y")
+print(trend2)
+ggsave("./Figures/trend2.pdf", plot = trend2, width = 8, height = 7, dpi = 300)
+
+
+creditcounts_year_0424 <- creditcounts_year_registry_0424 %>%
+  group_by(`Issuance Year`) %>%
+  summarise(credit_count = sum(credit_count))
+
+googletrends$ym <- as.Date(paste0(googletrends$ym, "-01"))
+googletrends$yr <- year(googletrends$ym)
+googletrends <- left_join(
+  googletrends,
+  creditcounts_year_0424,
+  by = c("yr" = "Issuance Year")
+)
+names(googletrends)
+
+
+#google trends & issued offsets
+
+trend3 <- ggplot(data = googletrends, aes(x = ym)) +
+  geom_area(aes(y = credit_count / 1e6, fill = "Issued offsets (in millions)"), alpha = 0.5) +
+  geom_line(aes(y = Offsets * 4, color = "Popularity (google search trend)"), size = 1) +
+  scale_x_date(
+    date_breaks = "2 year", 
+    date_labels = "%Y"    
+  ) +
+  labs(
+    x = "Year",
+    y = "",
+    fill = "",
+    color = ""
+  ) +
+  theme_classic() +
+  theme(
+    text = element_text(size = 12),
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+    axis.line = element_line(size = 0.5),
+    axis.ticks = element_line(size = 0.5),
+    legend.position = "top" 
+  ) +
+  scale_fill_manual(
+    values = c("Issued offsets (in millions)" = "lightblue")
+  ) +
+  scale_color_manual(
+    values = c("Popularity (google search trend)" = "#0072B5")
+  )
+print(trend3)
+ggsave("./Figures/trend3.pdf", plot = trend3, width = 13, height = 2, dpi = 300)
+
+```
+
+# CDM Data Analysis
+
+```{r CDM data summary statistics}
+
+ # generate a summary statistics table for all variables
+st(CDM_pipeline)
+
+#number of projects by status and by project type
+N_status_type <- CDM_pipeline %>%
+  group_by(`Host country`, Status, Type) %>%
+  summarise(Count = n()) %>%
+  spread(key = Type, value = Count, fill = 0)
+print(N_status_type)
+write.xlsx(N_status_type, "./Tables/N_status_type.xlsx")
+
+
+sort(table(CDM_pipeline$`Host country`), decreasing = TRUE)
+#   China                  India                 Brazil                Vietnam                 Mexico 
+#    5045                   3400                    764                    331                    329 
+#Thailand              Indonesia               Malaysia                  Chile            South Korea 
+#     281                    263                    262                    210                    164 
+
+ggplot(CDM_pipeline, aes(x=`Investment US$/tCO2`)) + 
+  geom_histogram(binwidth = 5, fill = "blue", color = "black") +
+  xlim(c(0, 2000)) + 
+  ggtitle("Histogram of Investment US$/tCO2") +
+  xlab("Investment US$/tCO2") +
+  ylab("Frequency")
+
+ggplot(CDM_pipeline, aes(x=`Reductions (ktCO2e/yr)`)) + 
+  geom_histogram(binwidth = 5, fill = "blue", color = "black") +
+  xlim(c(0, 500)) + 
+  ggtitle("Histogram of Reductions (ktCO2e/yr)") +
+  xlab("Reductions (ktCO2e/yr)") +
+  ylab("Frequency")
+
+ggplot(CDM_pipeline, aes(x=`CER price  US$/tCO2`)) + 
+  geom_histogram(binwidth = 1, fill = "blue", color = "black") +
+  xlim(c(0, 40)) + 
+  ggtitle("Histogram of CER price US$/tCO2") +
+  xlab("CER price US$/tCO2") +
+  ylab("Frequency")
+
+table(CDM_pipeline$Status)
+#   Deregistered   Pending Publication           Provisional            Registered              Rejected
+#             23                   174                    35                  8195                   283
+#  Validation Public    Validation Replaced Validation Terminated             Withdrawn 
+#               431            829                           3115                    67 
+
+```
+
+The registration rate by host country and by project type can reflect the policy hurdle rate.
+
+```{r registration rate by host country and by project type}
+
+filtered_CDM <- CDM_pipeline %>%
+  group_by(`Host country`, Type) %>%
+  mutate(project_count = n()) %>%
+  filter(project_count >= 1) %>%
+  ungroup() %>%
+  dplyr::select(-project_count)
+
+# filter project types: N > 100
+type_counts <- table(filtered_CDM$Type)
+sort(type_counts, decreasing = TRUE)
+type_to_keep <- names(type_counts[type_counts >= 100])
+filtered_CDM0 <- filtered_CDM[filtered_CDM$Type %in% type_to_keep, ]
+sort(table(filtered_CDM0$Type), decreasing = TRUE)
+
+# filter countries: N > 100
+country_counts <- table(filtered_CDM0$`Host country`)
+sort(country_counts, decreasing = TRUE)
+countries_to_keep <- names(country_counts[country_counts >= 100])
+filtered_CDM0 <- filtered_CDM0[filtered_CDM0$`Host country` %in% countries_to_keep, ]
+sort(table(filtered_CDM0$`Host country`), decreasing = TRUE)
+
+registration_summary <- filtered_CDM0 %>%
+  group_by(`Host country`, Type) %>%
+  summarise(
+    Total_Projects = n(),  
+    Registered_Projects = sum(Status == 'Registered', na.rm = TRUE), 
+    .groups = 'drop'
+  ) %>%
+  mutate(Registered_Rate = Registered_Projects/Total_Projects*100) %>%
+  filter(Total_Projects > 1)
+write_xlsx(registration_summary, "./Tables/registration_summary_CDM.xlsx")
+
+
+# registration rates across country-project-type-specific contexts under CDM
+
+registration <- ggplot(data = registration_summary, aes(x = Type, y = `Host country`, size = Total_Projects, color = Registered_Rate)) +
+  geom_point(alpha = 0.9) + 
+  scale_size_continuous(range = c(2, 12), name = "Number of projects") + 
+  scale_color_viridis_c(option = "plasma", name = "Registration rate (%)") + 
+  labs(
+    x = "Project Type",
+    y = "Host Country",
+    title = "Registration rates across contexts under the CDM"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1), 
+    axis.text.y = element_text(size = 10),           
+    legend.position = "right"                       
+  )
+registration
+ggsave("registration_rate_CDM.pdf", plot = registration, width = 9, height = 7, dpi = 300)
+
+
+# filter project types: N > 500
+type_counts <- table(filtered_CDM0$Type)
+sort(type_counts, decreasing = TRUE)
+type_to_keep <- names(type_counts[type_counts >= 500])
+filtered_CDM0 <- filtered_CDM0[filtered_CDM0$Type %in% type_to_keep, ]
+sort(table(filtered_CDM0$Type), decreasing = TRUE)
+
+# filter countries: N > 120
+country_counts <- table(filtered_CDM0$`Host country`)
+sort(country_counts, decreasing = TRUE)
+countries_to_keep <- names(country_counts[country_counts >= 120])
+filtered_CDM0 <- filtered_CDM0[filtered_CDM0$`Host country` %in% countries_to_keep, ]
+sort(table(filtered_CDM0$`Host country`), decreasing = TRUE)
+
+# Calculating the number of projects and registration rate by host country and by type
+registration_info <- filtered_CDM0 %>%
+  group_by(`Host country`, Type) %>%
+  summarise(Number_of_Projects = n(), .groups = 'drop',
+            Registered_Rate = sprintf("%.2f%%", mean(Status == 'Registered', na.rm = TRUE) * 100)) %>%
+  unite("Info", Number_of_Projects, Registered_Rate, sep=", ", remove=FALSE) %>%
+  select(-Number_of_Projects, -Registered_Rate) %>%
+  spread(Type, Info)
+
+# Viewing the table
+print(registration_info)
+
+write_xlsx(registration_info, "./Tables/registration_info_by_country_and_type.xlsx")
+
+
+
+# registration rates across country-project-type-specific contexts under VCM
+
+filtered_VCM <- Voluntary_credits %>%
+  filter(`ARB / WA \r\nProject` == "No") %>%
+  filter(`Voluntary Status` != "") %>%
+  group_by(Country, Type) %>%
+  mutate(project_count = n()) %>%
+  filter(project_count >= 1) %>%
+  ungroup() %>%
+  dplyr::select(-project_count)
+
+
+filtered_VCM$Country[filtered_VCM$Country == "Türkiye"] <- "Turkey"
+filtered_VCM$Type[filtered_VCM$Type == "Ozone Depleting Substances Recovery & Destruction"] <- "ODS Recovery & Destruction"
+
+registered_VCM <- filtered_VCM %>%
+  filter(`Voluntary Status` %in% c('Registered','Completed', 'Crediting Period Renewal and Verification Approval Requested', 'Crediting Period Renewal Requested', 'Gold Standard Certified Design', 'Gold Standard Certified Project','Registration and verification approval requested','Transitioned','Under development','Under validation', 'Verification approval requested'))
+
+st(Voluntary_credits)
+st(filtered_VCM)
+table(filtered_VCM$Type)
+#6450/8850 = 72.88%
+
+
+registration_summary_VCM <- filtered_VCM %>%
+  group_by(Country, Type) %>%
+  summarise(
+    Total_Projects = n(),  
+    Registered_Projects = sum(`Voluntary Status` %in% c('Registered','Completed', 'Crediting Period Renewal and Verification Approval Requested', 'Crediting Period Renewal Requested', 'Gold Standard Certified Design', 'Gold Standard Certified Project','Registration and verification approval requested','Transitioned','Under development','Under validation', 'Verification approval requested'), na.rm = TRUE), 
+    .groups = 'drop'
+  ) %>%
+  mutate(Registered_Rate = Registered_Projects/Total_Projects*100) %>%
+  filter(Country %in% c('United States', 'Uganda', 'Turkey', 'Rwanda', 'Nigeria', 'Mozambique', 'Mexico', 'Malawi', 'Madagascar', 'Kenya', 'India', 'China', 'Burkina Faso', 'Brazil', 'Bangladesh')) %>%
+  filter(Type %in% c('Afforestation/Reforestation', 'Biodigesters', 'Biomass', 'Clean Water', 'Cookstoves', 'Hydropower', 'Improved Forest Management', 'Landfill Methane', 'Manure Methane Digester','Mine Methane Capture','ODS Recovery & Destruction', 'REDD+', 'Rice Emission Reductions', 'Solar - Centralized', 'Sustainable Agriculture', 'Wind')) %>%
+  filter(Total_Projects >= 3) 
+write_xlsx(registration_summary_VCM, "./Tables/registration_summary_VCM.xlsx")
+
+
+registration_VCM <- ggplot(data = registration_summary_VCM, aes(x = Type, y = Country, size = Total_Projects, color = Registered_Rate)) +
+  geom_point(alpha = 0.9) +
+  scale_size_continuous(range = c(2, 12), name = "Number of projects") +  
+  scale_color_viridis_c(option = "plasma", name = "Registration rate (%)") + 
+  labs(
+    x = "Project Type",
+    y = "Host Country",
+    title = "Registration rates across contexts under the VCM"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 35, hjust = 1), 
+    axis.text.y = element_text(size = 10),           
+    legend.position = "right"                 
+  )
+registration_VCM
+ggsave("registration_VCM.pdf", plot = registration_VCM, width = 9, height = 7, dpi = 300)
+
+  
+# Calculating the number of projects and registration rate by host country and by type
+registration_info_VCM <- registration_summary_VCM %>%
+  unite("Info", Total_Projects, Registered_Rate, sep=", ", remove=FALSE) %>%
+  select(-Total_Projects, -Registered_Rate) %>%
+  spread(Type, Info)
+write_xlsx(registration_info_VCM, "./Tables/registration_info_by_country_and_type_voluntary.xlsx")
+
+
+Credit_VCM <- filtered_VCM %>%
+  filter(`Total Credits \r\nIssued` > 0) %>%
+  group_by(Country, Type) %>%
+  summarize(
+    count = n(),
+    mean_credit = mean(`Total Credits \r\nIssued`, na.rm = TRUE),
+    sd_credit = sd(`Total Credits \r\nIssued`, na.rm = TRUE),
+    median_credit = median(`Total Credits \r\nIssued`, na.rm = TRUE),
+    min_credit = min(`Total Credits \r\nIssued`, na.rm = TRUE),
+    max_credit = max(`Total Credits \r\nIssued`, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  filter(Country %in% c('United States', 'Uganda', 'Turkey', 'Rwanda', 'Nigeria', 'Mozambique', 'Mexico', 'Malawi', 'Madagascar', 'Kenya', 'India', 'China', 'Burkina Faso', 'Brazil', 'Bangladesh')) %>%
+  filter(Type %in% c('Afforestation/Reforestation', 'Biodigesters', 'Biomass', 'Clean Water', 'Cookstoves', 'Hydropower', 'Improved Forest Management', 'Landfill Methane', 'Manure Methane Digester','Mine Methane Capture','ODS Recovery & Destruction', 'REDD+', 'Rice Emission Reductions', 'Solar - Centralized', 'Sustainable Agriculture', 'Wind')) %>%
+  filter(count >= 3) 
+
+
+```
+
+
+The visualization helps better understand each context and selects a proper context for further model calibration.
+
+```{r visualization, warning=FALSE}
+
+custom_colors_9 <- c("#D55E00", "#F0E442", "#E69F00", "#009E73", "#CC79A7", "#FF5733", "#56B4E9", "#D41E85", "#0072B2")
+
+# number of projects by status
+projects_status <- ggplot(CDM_pipeline, aes(x = YearMonth, group = Status, color = Status)) +
+  geom_line(stat = "count") +
+  labs(
+       x = "Date of Validation",
+       y = "Number of CDM projects") +
+  theme_classic() + theme(legend.position = "bottom", panel.grid = element_blank()) +
+  scale_color_manual(values = custom_colors_9) +
+  scale_x_discrete(breaks = unique(CDM_pipeline$YearMonth)[unique(CDM_pipeline$YearMonth) >= "2005-06" & seq_along(unique(CDM_pipeline$YearMonth)) %% 24 == 0])
+projects_status
+ggsave("projects_status.pdf", plot = projects_status, width = 9, height = 7, dpi = 300)
+
+
+# filtered_CDM1: filter project types: N > 200
+country_counts <- table(filtered_CDM$`Host country`)
+sort(country_counts, decreasing = TRUE)
+countries_to_keep <- names(country_counts[country_counts >= 300])
+filtered_CDM1 <- filtered_CDM[filtered_CDM$`Host country` %in% countries_to_keep, ]
+sort(table(filtered_CDM1$`Host country`), decreasing = TRUE)
+
+custom_colors_5 <- c("#D55E00", "#56B4E9", "#E69F00", "#009E73", "#CC79A7")
+
+## number of policies by host country
+project_hostcountry <- ggplot(filtered_CDM1, aes(x = YearMonth, group = `Host country`, color = `Host country`)) +
+  geom_line(stat = "count") +
+  labs(
+       x = "Date of Validation",
+       y = "Number of CDM projects") +
+  scale_color_manual(values = custom_colors_5) +
+  theme_classic() + theme(legend.position = "bottom", panel.grid = element_blank()) +
+  scale_x_discrete(breaks = unique(CDM_pipeline$YearMonth)[unique(CDM_pipeline$YearMonth) >= "2005-06" & seq_along(unique(CDM_pipeline$YearMonth)) %% 24 == 0])
+project_hostcountry
+ggsave("project_hostcountry.pdf", plot = project_hostcountry, width = 9, height = 7, dpi = 300)
+
+
+# filtered_CDM2: filter project types: N > 250
+type_counts <- table(filtered_CDM$Type)
+sort(type_counts, decreasing = TRUE)
+type_to_keep <- names(type_counts[type_counts >= 260])
+filtered_CDM2 <- filtered_CDM[filtered_CDM$Type %in% type_to_keep, ]
+sort(table(filtered_CDM2$Type), decreasing = TRUE)
+
+## number of policies by project type
+ggplot(filtered_CDM2, aes(x = YearMonth, group = Type, color = Type)) +
+  geom_line(stat = "count") +
+  labs(
+       x = "Date of Validation",
+       y = "Number of projects") +
+  theme_bw() + theme(legend.position = "bottom", panel.border = element_blank()) +
+  scale_color_manual(values = custom_colors_9) +
+  scale_x_discrete(breaks = unique(CDM_pipeline$YearMonth)[unique(CDM_pipeline$YearMonth) >= "2005-06" & seq_along(unique(CDM_pipeline$YearMonth)) %% 24 == 0])
+
+
+# filtered_CDM3: filter countries: N > 500 (China, India, Brazil)
+country_counts <- table(CDM_pipeline$`Host country`)
+sort(country_counts, decreasing = TRUE)
+countries_to_keep <- names(country_counts[country_counts >= 500])
+filtered_CDM3 <- CDM_pipeline[CDM_pipeline$`Host country` %in% countries_to_keep, ]
+sort(table(filtered_CDM3$`Host country`), decreasing = TRUE)
+
+# filtered_CDM3: filter project types: N > 1000 (Wind, Hydro, Biomass energy)
+type_counts <- table(filtered_CDM3$Type)
+sort(type_counts, decreasing = TRUE)
+type_to_keep <- names(type_counts[type_counts >= 1000])
+filtered_CDM3 <- filtered_CDM3[filtered_CDM3$Type %in% type_to_keep, ]
+sort(table(filtered_CDM3$Type), decreasing = TRUE)
+
+
+# filtered_CDM4: filter countries: N > 500 (China, India, Brazil)
+country_counts <- table(CDM_pipeline$`Host country`)
+sort(country_counts, decreasing = TRUE)
+countries_to_keep <- names(country_counts[country_counts >= 500])
+filtered_CDM4 <- CDM_pipeline[CDM_pipeline$`Host country` %in% countries_to_keep, ]
+sort(table(filtered_CDM4$`Host country`), decreasing = TRUE)
+
+#filtered_CDM4 <- filtered_CDM4[!is.na(filtered_CDM4$`IRR benchmark`), ]
+
+
+
+# voluntary markets
+ACR <- Voluntary_credits[Voluntary_credits$`Voluntary Registry` == "ACR",]  
+CAR <- Voluntary_credits[Voluntary_credits$`Voluntary Registry` == "CAR",]  
+GOLD <- Voluntary_credits[Voluntary_credits$`Voluntary Registry` == "GOLD",]  
+VCS <- Voluntary_credits[Voluntary_credits$`Voluntary Registry` == "ACR",]  
+
+Voluntary_credits <- Voluntary_credits %>%
+  filter(`First Year of Project (Vintage)` >= 2000)
+
+Voluntary_projects <- ggplot(Voluntary_credits, aes(x = `First Year of Project (Vintage)`, group = `Voluntary Registry`, color = `Voluntary Registry`)) +
+  geom_line(stat = "count") +
+  labs(
+       x = "First Vintage Year",
+       y = "Number of projects") +
+#  scale_color_manual(values = custom_colors_5) +
+  theme_classic() + theme(legend.position = "bottom", panel.grid = element_blank())
+Voluntary_projects
+ggsave("Voluntary_projects.pdf", plot = Voluntary_projects, width = 9, height = 7, dpi = 300)
+
+
+voluntary_country_counts <- table(Voluntary_credits$Country)
+sort(voluntary_country_counts, decreasing = TRUE)
+voluntary_countries_to_keep <- names(voluntary_country_counts[voluntary_country_counts >= 200])
+filtered_Voluntary_credits <- Voluntary_credits[Voluntary_credits$Country %in% voluntary_countries_to_keep, ]
+sort(table(filtered_Voluntary_credits$Country), decreasing = TRUE)
+
+Voluntary_projects_country <- ggplot(filtered_Voluntary_credits, aes(x = `First Year of Project (Vintage)`, group = Country, color = Country)) +
+  geom_line(stat = "count") +
+  labs(
+       x = "First Vintage Year",
+       y = "Number of projects") +
+#  scale_color_manual(values = custom_colors_5) +
+  theme_classic() + theme(legend.position = "bottom", panel.grid = element_blank())
+Voluntary_projects_country
+
+
+unique(Voluntary_credits$`Voluntary Status`)
+credits_by_year <- Voluntary_credits %>%
+  filter(`Voluntary Status` != "Withdrawn") %>%
+  group_by(`First Year of Project (Vintage)`, `Voluntary Registry`) %>%
+  summarise(Total_Issued = sum(`Total Credits \r\nIssued`, na.rm = TRUE), .groups = "drop") %>%
+  arrange(`First Year of Project (Vintage)`)
+
+Voluntary_project_credits <- ggplot(credits_by_year, aes(x = `First Year of Project (Vintage)`, y = Total_Issued, color = `Voluntary Registry`)) +
+  geom_line() +
+  labs(
+       x = "First Vintage Year",
+       y = "Number of issued credits") +
+#  scale_color_manual(values = custom_colors_5) +
+  theme_classic() + theme(legend.position = "bottom", panel.grid = element_blank())
+Voluntary_project_credits
+
+
+ACR_status <- ggplot(ACR, aes(x = `First Year of Project (Vintage)`, group = `Voluntary Status`, color = `Voluntary Status`)) +
+  geom_line(stat = "count") +
+  labs(
+       x = "First Vintage Year",
+       y = "Number of projects") +
+#  scale_color_manual(values = custom_colors_5) +
+  theme_classic() + theme(legend.position = "bottom", panel.grid = element_blank())
+ACR_status
+
+CAR_status <- ggplot(CAR, aes(x = `First Year of Project (Vintage)`, group = `Voluntary Status`, color = `Voluntary Status`)) +
+  geom_line(stat = "count") +
+  labs(
+       x = "First Vintage Year",
+       y = "Number of projects") +
+#  scale_color_manual(values = custom_colors_5) +
+  theme_classic() + theme(legend.position = "bottom", panel.grid = element_blank())
+CAR_status
+
+GOLD_status <- ggplot(GOLD, aes(x = `First Year of Project (Vintage)`, group = `Voluntary Status`, color = `Voluntary Status`)) +
+  geom_line(stat = "count") +
+  labs(
+       x = "First Vintage Year",
+       y = "Number of projects") +
+#  scale_color_manual(values = custom_colors_5) +
+  theme_classic() + theme(legend.position = "bottom", panel.grid = element_blank())
+GOLD_status
+
+VCS_status <- ggplot(VCS, aes(x = `First Year of Project (Vintage)`, group = `Voluntary Status`, color = `Voluntary Status`)) +
+  geom_line(stat = "count") +
+  labs(
+       x = "First Vintage Year",
+       y = "Number of projects") +
+#  scale_color_manual(values = custom_colors_5) +
+  theme_classic() + theme(legend.position = "bottom", panel.grid = element_blank())
+VCS_status
+
+
+
+# Analyse the benchmark IRR within one context (country-project-type-specific)
+
+benchmarkIRR <- filtered_CDM %>%
+  group_by(`Host country`, `Type`) %>%
+  summarize(
+    count_IRR = n(),
+    mean_IRR = mean(`IRR benchmark`, na.rm = TRUE),
+    sd_IRR = sd(`IRR benchmark`, na.rm = TRUE),
+    median_IRR = median(`IRR benchmark`, na.rm = TRUE),
+    min_IRR = min(`IRR benchmark`, na.rm = TRUE),
+    max_IRR = max(`IRR benchmark`, na.rm = TRUE),
+    unique_IRR_count = n_distinct(`IRR benchmark`, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+wb <- createWorkbook()
+addWorksheet(wb, "benchmarkIRR")
+writeData(wb, "benchmarkIRR", benchmarkIRR)
+saveWorkbook(wb, file = "./Tables/benchmarkIRR.xlsx")
+
+
+benchmarkIRR_filtered <- benchmarkIRR %>%
+  filter(count_IRR > 2 & mean_IRR != "NaN") %>%
+  filter(`Host country` %in% c(
+  "Vietnam", "Thailand", "South Korea", "South Africa", "Philippines",
+  "Mexico", "Malaysia", "Indonesia", "India", "Colombia",
+  "China", "Chile", "Brazil"
+)) %>%
+  filter(Type %in% c(
+  "Biomass energy", "Coal bed/mine methane", "EE households", "EE industry",
+  "EE own generation", "EE service", "EE supply side", "Fossil fuel switch",
+  "Fugitive", "Hydro", "Landfill gas", "Methane avoidance", "N2O",
+  "Solar", "Wind"
+))
+write_xlsx(benchmarkIRR_filtered, "./Tables/benchmarkIRR_filtered_CDM.xlsx")
+
+benchmarkIRR_CDM <- ggplot(data = benchmarkIRR_filtered, aes(x = Type, y = `Host country`)) +
+  geom_point(aes(size = sd_IRR, color = mean_IRR), alpha = 0.9) +
+  scale_color_gradient2(
+    low = "green",        
+    mid = "yellow",       
+    high = "red",        
+    midpoint = median(benchmarkIRR_filtered$mean_IRR, na.rm = TRUE),
+    name = "Investment risk"
+  ) +
+  scale_size_continuous(range = c(2, 12), name = "Heterogeneity") +
+  labs(
+    x = "Project Type",
+    y = "Host Country",
+    title = "Investment risk and heterogeneity across contexts under the CDM"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  
+    axis.text.y = element_text(size = 10),            
+    legend.position = "right"           
+  )
+benchmarkIRR_CDM
+ggsave("benchmarkIRR_CDM.pdf", plot = benchmarkIRR_CDM, width = 9, height = 7, dpi = 300)
+
+
+
+ggplot(filtered_CDM3, aes(x = `IRR % excl. CER`, y = ChangeIRR, color = Type)) +
+  geom_point() +
+  labs(title = "Scatter Plot", x = "IRR without CERs", y = "Increase in IRR") +
+  xlim(0, 20) + 
+  ylim(0, 20)
+
+ggplot(filtered_CDM3, aes(x = `IRR % excl. CER`, y = ChangeIRR, color = `Host country`, shape = Type)) +
+  geom_point() +
+  labs(title = "The Relation between IRR without CERs and Increase in IRR due to CERs", x = "IRR without CERs", y = "Increase in IRR") +
+  xlim(0, 20) + 
+  ylim(0, 10)
+
+ggplot(filtered_CDM3, aes(x = `IRR % excl. CER`, y = `IRR  % incl. CER`, color = `Host country`, shape = Type)) +
+  geom_point() +
+  labs(title = "The Relation between IRR without CERs and IRR with CERs", x = "IRR without CERs", y = "IRR with CERs") +
+  xlim(0, 20) + 
+  ylim(5, 20)
+
+ggplot(filtered_CDM3, aes(x = `IRR % excl. CER`, y = `CER price  US$/tCO2`, color = `Host country`, shape = Type)) +
+  geom_point() +
+  labs(title = "The Relation between IRR without CERs and CER price", x = "IRR without CERs", y = "CER price") +
+  xlim(0, 20) + 
+  ylim(5, 25) +
+  theme_classic()
+
+ggplot(filtered_CDM, aes(x = `IRR % excl. CER`, y = `CER price  US$/tCO2`)) +
+  geom_point() +
+  labs(title = "The Relation between IRR without CERs and CER price", x = "IRR without CERs", y = "CER price") +
+  xlim(0, 20) + 
+  ylim(5, 25) +
+  theme_classic()
+
+ggplot(filtered_CDM, aes(x = `Reductions (ktCO2e/yr)`, y = `CER price  US$/tCO2`)) +
+  geom_point() +
+  labs(title = "The Relation between Reductions (ktCO2e/yr) and CER price", x = "Reductions (ktCO2e/yr)", y = "CER price") +
+  xlim(0, 1000) + 
+  ylim(5, 25) +
+  theme_classic()
+
+
+ggplot(filtered_CDM3, aes(x = `IRR benchmark`, y = `CER price  US$/tCO2`, color = `Host country`, shape = Type)) +
+  geom_point() +
+  labs(title = "The Relation between IRR benchmark and CER price", x = "IRR benchmark", y = "CER price") +
+  xlim(5, 20) + 
+  ylim(5, 25)
+
+names(filtered_CDM3)
+ggplot(filtered_CDM3, aes(x = `Reductions (ktCO2e/yr)`, y = `CER price  US$/tCO2`, color = `Host country`, shape = Type)) +
+  geom_point() +
+  labs(title = "The Relation between Reductions (ktCO2e/yr) and CER price", x = "Reductions (ktCO2e/yr)", y = "CER price") +
+  xlim(0, 1000) + 
+  ylim(0, 30)
+
+
+CERprice <- filtered_CDM %>%
+  filter(Status == "Registered") %>%
+  group_by(`Host country`, `Type`) %>%
+  summarize(
+    count = n(),
+    mean_CO2 = mean(`Reductions (ktCO2e/yr)`, na.rm = TRUE),
+    sd_CO2 = sd(`Reductions (ktCO2e/yr)`, na.rm = TRUE),
+    median_CO2 = median(`Reductions (ktCO2e/yr)`, na.rm = TRUE),
+    min_CO2 = min(`Reductions (ktCO2e/yr)`, na.rm = TRUE),
+    max_CO2 = max(`Reductions (ktCO2e/yr)`, na.rm = TRUE),
+    mean_price = mean(`CER price  US$/tCO2`, na.rm = TRUE),
+    sd_price = sd(`CER price  US$/tCO2`, na.rm = TRUE),
+    median_price = median(`CER price  US$/tCO2`, na.rm = TRUE),
+    min_price = min(`CER price  US$/tCO2`, na.rm = TRUE),
+    max_price = max(`CER price  US$/tCO2`, na.rm = TRUE),
+    mean_cost = mean(`Investment MUS$`, na.rm = TRUE),
+    sd_cost = sd(`Investment MUS$`, na.rm = TRUE),
+    median_cost = median(`Investment MUS$`, na.rm = TRUE),
+    min_cost = min(`Investment MUS$`, na.rm = TRUE),
+    max_cost = max(`Investment MUS$`, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+
+CERprice_filtered <- CERprice %>%
+  filter(count > 2 & mean_CO2 != "NaN" & mean_price != "NaN") %>%
+  filter(`Host country` %in% c(
+  "Vietnam", "Thailand", "South Korea", "South Africa", "Philippines",
+  "Mexico", "Malaysia", "Indonesia", "India", "Colombia",
+  "China", "Chile", "Brazil"
+)) %>%
+  filter(Type %in% c(
+  "Biomass energy", "Coal bed/mine methane", "EE households", "EE industry",
+  "EE own generation", "EE service", "EE supply side", "Fossil fuel switch",
+  "Fugitive", "Hydro", "Landfill gas", "Methane avoidance", "N2O",
+  "Solar", "Wind"
+))
+write_xlsx(CERprice_filtered, "./Tables/CERprice_filtered_CDM.xlsx")
+
+
+CERprice_CDM <- ggplot(data = CERprice_filtered, aes(x = Type, y = `Host country`)) +
+  geom_point(aes(size = mean_CO2, color = mean_price), alpha = 0.9) +
+  scale_color_gradient(low = "cyan", high = "navy", name = "Offset price US$/tCO2") +
+  scale_size_continuous(range = c(2, 12), name = "Reductions (ktCO2e/yr)") +
+  labs(
+    x = "Project Type",
+    y = "Host Country",
+    title = "Offset price and quantity across contexts under the CDM"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  
+    axis.text.y = element_text(size = 10),          
+    legend.position = "right"                   
+#    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+#    panel.grid = element_blank()                   
+  )
+CERprice_CDM
+ggsave("CERprice_CDM.pdf", plot = CERprice_CDM, width = 9, height = 7, dpi = 300)
+
+
+
+ggplot(filtered_CDM3, aes(ChangeIRR)) + geom_density(aes(fill=factor(Type)), alpha=0.7) + 
+      xlim(0,12) +
+    labs(title="Density plot", 
+         subtitle="Change in IRR of Renewable Projects in China, India and Brazil",
+         caption="Source: CDMPipeline",
+         x="Change in IRR",
+         fill="Project Type")
+
+#custom_colors <- c("#4C72B0", "#55A868", "#C44E52", "#8172B2", "#CCB974", "#64B5CD", "#8C785D", "#D4A5A5", "#A79D6E")
+
+# stacked bar charts
+ggplot(CDM_pipeline, aes(x = YearMonth, fill = Status)) +
+  geom_bar() +
+  labs(title = "Time Trend in the Number of CDM Projects by Status",
+       x = "Date of Validation",
+       y = "Number of Projects") +
+  theme_bw() + theme(legend.position = "bottom", panel.border = element_blank()) +
+  scale_fill_manual(values = custom_colors) +
+  scale_x_discrete(breaks = unique(CDM_pipeline$YearMonth)[unique(CDM_pipeline$YearMonth) >= "2005-06" & seq_along(unique(CDM_pipeline$YearMonth)) %% 24 == 0])
+
+
+ggplot(filtered_CDM2, aes(x = YearMonth, fill = Type)) +
+  geom_bar() +
+  labs(title = "Time Trend in the Number of CDM Projects by Type",
+       x = "Date of Validation",
+       y = "Status") +
+  theme_bw() + theme(legend.position = "bottom") +
+  scale_x_discrete(breaks = unique(CDM_pipeline$YearMonth)[unique(CDM_pipeline$YearMonth) >= "2005-06" & seq_along(unique(CDM_pipeline$YearMonth)) %% 24 == 0])
+
+```
+
+
+
+The country-sector-specific context analysis is useful for estimating non-additionality risks.
+
+```{r subsets by country and by project type}
+
+# The context of China Wind farms is more homogeneous than other project types.
+table(CDM_pipeline$`Sub-type`[CDM_pipeline$Type == "Wind" & CDM_pipeline$`Host country` == "China"])
+#Offshore Wind          Wind 
+#            2          1612 
+table(CDM_pipeline$`Sub-type`[CDM_pipeline$Type == "Hydro" & CDM_pipeline$`Host country` == "China"])
+#Existing dam    Higher efficiency hydro power     New dam    Run of river    Run of river+new dam 
+#          43                                1         481            1211                       2
+
+table(CDM_pipeline$`Sub-type`[CDM_pipeline$Type == "Wind" & CDM_pipeline$`Host country` == "India"])
+
+#write_rds(CDM_RE_China, "CDM_RE_China.rds")
+#write_rds(CDM_Wind_India, "./Data/cleaned/CDM_Wind_India.rds")
+
+table(CDM_pipeline$`Sub-type`[CDM_pipeline$Type == "Wind" & CDM_pipeline$`Host country` == "India"])
+#Wind 
+#1107
+table(CDM_pipeline$`Sub-type`[CDM_pipeline$Type == "Hydro" & CDM_pipeline$`Host country` == "India"])
+#Existing dam      New dam Run of river 
+#          32           18          279 
+          
+```
+
+# Parameter calibration
+We take the CDM’s wind projects in China for parameter calibration and model simulation in this section and the subsequent ones, since the sample size is large enough to be representative (n = 1614) and these projects are relatively homogeneous involving solely the construction of wind farms.
+
+```{r Parameter Distribution for Wind farms in China}
+
+#par(mfrow = c(2, 2), mar = c(4, 4, 2, 1), oma = c(1, 1, 1, 1))
+#par(mfrow = c(2, 2), mar = c(3.8, 4, 1.8, 1), oma = c(0.2, 0.5, 0.2, 0.5))
+
+
+hist(CDM_Wind_China$`IRR % excl. CER`, 
+     main = "",
+#     main = "Histogram of IRR % excl. CER for Wind projects in China",
+     xlab = expression(italic(r[0]) * " (IRR % excl. CER)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+hist(CDM_Wind_China$`IRR  % incl. CER`,
+     main = "",
+#     main = "Histogram of IRR % incl. CER for Wind projects in China",
+     xlab = expression(italic(r[1]) * " (IRR % incl. CER)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+hist(CDM_Wind_China$`IRR benchmark`, 
+     main = "",
+#     main = "Histogram of benchmark IRR for Wind projects in China",
+     xlab = expression(italic(bar(R)) * " (IRR benchmark %)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 50
+)
+
+hist(CDM_Wind_China$ChangeIRR, 
+     main = "",
+#     main = "Histogram of IRR increase for Wind projects in China",
+     xlab = expression(italic(f) * " (Increase in IRR %)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+par(mfrow = c(1, 1))
+
+cor(CDM_Wind_China$`IRR % excl. CER`, CDM_Wind_China$`IRR  % incl. CER`, use = "complete.obs") # 0.61
+cor(CDM_Wind_China$`IRR % excl. CER`, CDM_Wind_China$ChangeIRR, use = "complete.obs") # -0.3079528
+cor(CDM_Wind_China$`IRR % excl. CER`, CDM_Wind_China$`AnnualCredRev(MUS)`, use = "complete.obs") # -0.04781056
+cor(CDM_Wind_China$`IRR % excl. CER`, CDM_Wind_China$AnnualCashFlow, use = "complete.obs") # 0.002943527
+
+cor(CDM_Wind_China$`IRR  % incl. CER`, CDM_Wind_China$ChangeIRR, use = "complete.obs") # 0.5616478
+cor(CDM_Wind_China$`IRR  % incl. CER`, CDM_Wind_China$`AnnualCredRev(MUS)`, use = "complete.obs") # 0.1531471
+cor(CDM_Wind_China$`IRR  % incl. CER`, CDM_Wind_China$AnnualCashFlow, use = "complete.obs") # 0.01480337
+
+cor(CDM_Wind_China$AnnualCashFlow, CDM_Wind_China$ChangeIRR, use = "complete.obs") #0.01464328
+cor(CDM_Wind_China$AnnualCashFlow, CDM_Wind_China$`AnnualCredRev(MUS)`, use = "complete.obs") #0.2393983
+cor(CDM_Wind_China$ChangeIRR, CDM_Wind_China$`AnnualCredRev(MUS)`, use = "complete.obs") #0.231162
+
+
+#par(mfrow = c(2, 2), mar = c(4, 4, 2, 1), oma = c(1, 1, 1, 1))
+#par(mfrow = c(2, 2), mar = c(3.8, 4, 1.8, 1), oma = c(0.2, 0.5, 0.2, 0.5))
+
+
+# Visualize the distributions
+
+hist(CDM_Wind_China$`Investment MUS$`[CDM_Wind_China$`Investment MUS$`<200], 
+     main = "",
+#     main = "Histogram of Investment MUS$ for Wind projects in China",
+     xlab = expression(italic(C[0]) * " (Investment, million US$)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+hist(CDM_Wind_China$`CER price  US$/tCO2`[CDM_Wind_China$`CER price  US$/tCO2`<30], 
+     main = "",
+#     main = "Histogram of CER prices for Wind projects in China",
+     xlab = expression(italic(P) * " (CER price, US$/tCO2)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+#CDM_Wind_China$`Reductions (tCO2e/yr)` <- CDM_Wind_China$`Reductions (ktCO2e/yr)`*1000
+
+#par(mfrow = c(2, 2), mar = c(3.9, 4, 1.9, 1), oma = c(0.2, 0.5, 0.2, 0.5))
+#par(mfrow = c(1, 2), mar = c(3.9, 4, 1.8, 1), oma = c(0.5, 0.5, 0.5, 0.5))
+
+
+hist(CDM_Wind_China$`Reductions (ktCO2e/yr)`[CDM_Wind_China$`Reductions (ktCO2e/yr)`<250],
+     main = "",
+#     main = "Histogram of reductions (ktCO2e/yr) for Wind projects in China",
+     xlab = expression(italic(Q) * " (Reductions, ktCO2e/yr)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+hist(CDM_Wind_China$yrs., 
+     main = "",
+#     main = "Histogram of operating years for Wind projects in China",
+     xlab = expression(italic(T) * " (Crediting years)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 50
+)
+
+hist(CDM_Wind_China$`AnnualCredRev(MUS)`[CDM_Wind_China$`AnnualCredRev(MUS)`<6],
+     main = "",
+#     main = "Histogram of annual credit revenue for Wind projects in China",
+     xlab = "Credit revenue (million US$/yr)",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+hist(CDM_Wind_China$MW[CDM_Wind_China$MW < 220], 
+     main = "",
+#     main = "Histogram of Capacity for Wind projects in China",
+     xlab = "Capacity (MW)",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+
+hist(CDM_Wind_China$`Full time hours`[CDM_Wind_China$`Full time hours`<8760], 
+     main = "",
+#     main = "Histogram of full time hours for Wind projects in China",
+     xlab = "Full time hours",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+
+# Select important variables and rename them with symbols
+c <- CDM_Wind_China %>%
+  dplyr::select(
+    r_0 = `IRR % excl. CER`,
+    Q = `Reductions (ktCO2e/yr)`,
+    P = `CER price  US$/tCO2`,
+    r_1 = `IRR  % incl. CER`,
+    f = ChangeIRR
+  )
+
+# Compute the correlation matrix
+corr <- round(cor(c, use = "pairwise.complete.obs"), 2)
+
+# Create the correlation plot
+p <- ggcorrplot(corr, hc.order = TRUE, 
+                type = "lower", 
+                lab = TRUE, 
+                lab_size = 3, 
+                method = "circle", 
+                colors = c("tomato2", "white", "springgreen3"), 
+#                title = "Correlogram of wind plant parameters", 
+                ggtheme = theme_bw())
+
+# Customize the labels using ggplot2
+p + scale_x_discrete(labels = c(
+      "r_0" = expression(italic(r)[0]),
+      "Q" = expression(italic(Q)),
+      "P" = expression(italic(P)),
+      "r_1" = expression(italic(r)[1]),
+      "f" = expression(italic(f))
+    )) +
+    scale_y_discrete(labels = c(
+      "r_0" = expression(italic(r)[0]),
+      "Q" = expression(italic(Q)),
+      "P" = expression(italic(P)),
+      "r_1" = expression(italic(r)[1]),
+      "f" = expression(italic(f))
+    )) +
+    theme(axis.text.x = element_text(angle = 0))  +  # Ensure x-axis labels are not tilted
+    scale_size(range = c(7.5, 17.5))  # Increase the range for circle sizes
+
+
+```
+
+```{r Parameter Distribution for Wind farms in India}
+
+par(mfrow = c(1, 1))
+
+#par(mfrow = c(2, 2), mar = c(4, 4, 2, 1), oma = c(1, 1, 1, 1))
+par(mfrow = c(2, 2), mar = c(3.8, 4, 1.8, 1), oma = c(0.2, 0.5, 0.2, 0.5))
+
+hist(CDM_Wind_India$`IRR % excl. CER`, 
+     main = "",
+#     main = "Histogram of IRR % excl. CER for Wind projects in China",
+     xlab = expression(italic(r[0]) * " (IRR % excl. CER)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+hist(CDM_Wind_India$`IRR  % incl. CER`,
+     main = "",
+#     main = "Histogram of IRR % incl. CER for Wind projects in China",
+     xlab = expression(italic(r[1]) * " (IRR % incl. CER)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+hist(CDM_Wind_India$`IRR benchmark`, 
+     main = "",
+#     main = "Histogram of benchmark IRR for Wind projects in China",
+     xlab = expression(italic(bar(R)) * " (IRR benchmark %)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+hist(CDM_Wind_India$ChangeIRR, 
+     main = "",
+#     main = "Histogram of IRR increase for Wind projects in China",
+     xlab = expression(italic(f) * " (Increase in IRR %)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+library(PearsonDS)
+library(truncnorm) #Truncated Normal
+
+describe(CDM_Wind_India$`IRR % excl. CER`)
+describe(CDM_Wind_India$`IRR  % incl. CER`)
+describe(CDM_Wind_India$`IRR benchmark`)
+describe(CDM_Wind_India$ChangeIRR)
+
+
+
+par(mfrow = c(1, 1))
+
+cor(CDM_Wind_India$`IRR % excl. CER`, CDM_Wind_India$`IRR  % incl. CER`, use = "complete.obs") # 0.646
+cor(CDM_Wind_India$`IRR % excl. CER`, CDM_Wind_India$ChangeIRR, use = "complete.obs") # -0.290293
+cor(CDM_Wind_India$`IRR % excl. CER`, CDM_Wind_India$`AnnualCredRev(MUS)`, use = "complete.obs") # -0.001854272
+cor(CDM_Wind_India$`IRR % excl. CER`, CDM_Wind_India$AnnualCashFlow, use = "complete.obs") # 0.002943527
+
+cor(CDM_Wind_India$`IRR  % incl. CER`, CDM_Wind_India$ChangeIRR, use = "complete.obs") # 0.5427518
+cor(CDM_Wind_India$`IRR  % incl. CER`, CDM_Wind_India$`AnnualCredRev(MUS)`, use = "complete.obs") # -0.0351685
+cor(CDM_Wind_India$`IRR  % incl. CER`, CDM_Wind_India$AnnualCashFlow, use = "complete.obs") # 0.01480337
+
+cor(CDM_Wind_India$AnnualCashFlow, CDM_Wind_India$ChangeIRR, use = "complete.obs") #0.01464328
+cor(CDM_Wind_India$AnnualCashFlow, CDM_Wind_India$`AnnualCredRev(MUS)`, use = "complete.obs") #0.2393983
+cor(CDM_Wind_India$ChangeIRR, CDM_Wind_India$`AnnualCredRev(MUS)`, use = "complete.obs") #0.231162
+
+
+#par(mfrow = c(2, 2), mar = c(4, 4, 2, 1), oma = c(1, 1, 1, 1))
+par(mfrow = c(2, 2), mar = c(3.8, 4, 1.8, 1), oma = c(0.2, 0.5, 0.2, 0.5))
+
+
+# Visualize the distributions
+
+hist(CDM_Wind_India$`Investment MUS$`[CDM_Wind_India$`Investment MUS$`<200], 
+     main = "",
+#     main = "Histogram of Investment MUS$ for Wind projects in China",
+     xlab = expression(italic(C[0]) * " (Investment, million US$)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+hist(CDM_Wind_India$`CER price  US$/tCO2`[CDM_Wind_India$`CER price  US$/tCO2`<30], 
+     main = "",
+#     main = "Histogram of CER prices for Wind projects in China",
+     xlab = expression(italic(P) * " (CER price, US$/tCO2)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+#CDM_Wind_China$`Reductions (tCO2e/yr)` <- CDM_Wind_China$`Reductions (ktCO2e/yr)`*1000
+
+#par(mfrow = c(2, 2), mar = c(3.9, 4, 1.9, 1), oma = c(0.2, 0.5, 0.2, 0.5))
+#par(mfrow = c(1, 2), mar = c(3.9, 4, 1.8, 1), oma = c(0.5, 0.5, 0.5, 0.5))
+
+
+hist(CDM_Wind_India$`Reductions (ktCO2e/yr)`[CDM_Wind_India$`Reductions (ktCO2e/yr)`<250],
+     main = "",
+#     main = "Histogram of reductions (ktCO2e/yr) for Wind projects in China",
+     xlab = expression(italic(Q) * " (Reductions, ktCO2e/yr)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+hist(CDM_Wind_India$yrs., 
+     main = "",
+#     main = "Histogram of operating years for Wind projects in China",
+     xlab = expression(italic(T) * " (Crediting years)"),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 50
+)
+
+par(mfrow = c(1, 1))
+
+hist(CDM_Wind_India$`AnnualCredRev(MUS)`[CDM_Wind_India$`AnnualCredRev(MUS)`<6],
+     main = "",
+#     main = "Histogram of annual credit revenue for Wind projects in China",
+     xlab = "Credit revenue (million US$/yr)",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+hist(CDM_Wind_India$MW[CDM_Wind_India$MW < 220], 
+     main = "",
+#     main = "Histogram of Capacity for Wind projects in China",
+     xlab = "Capacity (MW)",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+
+hist(CDM_Wind_India$`Full time hours`[CDM_Wind_India$`Full time hours`<8760], 
+     main = "",
+#     main = "Histogram of full time hours for Wind projects in China",
+     xlab = "Full time hours",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 100
+)
+
+
+# Select important variables and rename them with symbols
+c1 <- CDM_Wind_India %>%
+  dplyr::select(
+    r_0 = `IRR % excl. CER`,
+    Q = `Reductions (ktCO2e/yr)`,
+    P = `CER price  US$/tCO2`,
+    r_1 = `IRR  % incl. CER`,
+    f = ChangeIRR
+  )
+
+# Compute the correlation matrix
+corr1 <- round(cor(c1, use = "pairwise.complete.obs"), 2)
+
+# Create the correlation plot
+p1 <- ggcorrplot(corr1, hc.order = TRUE, 
+                type = "lower", 
+                lab = TRUE, 
+                lab_size = 3, 
+                method = "circle", 
+                colors = c("tomato2", "white", "springgreen3"), 
+#                title = "Correlogram of wind plant parameters", 
+                ggtheme = theme_bw())
+
+# Customize the labels using ggplot2
+p1 + scale_x_discrete(labels = c(
+      "r_0" = expression(italic(r)[0]),
+      "Q" = expression(italic(Q)),
+      "P" = expression(italic(P)),
+      "r_1" = expression(italic(r)[1]),
+      "f" = expression(italic(f))
+    )) +
+    scale_y_discrete(labels = c(
+      "r_0" = expression(italic(r)[0]),
+      "Q" = expression(italic(Q)),
+      "P" = expression(italic(P)),
+      "r_1" = expression(italic(r)[1]),
+      "f" = expression(italic(f))
+    )) +
+    theme(axis.text.x = element_text(angle = 0))  +  # Ensure x-axis labels are not tilted
+    scale_size(range = c(7.5, 17.5))  # Increase the range for circle sizes
+
+
+```
+
+
+```{r calibrate the model}
+
+st(CDM_Wind_China)
+describe(CDM_Wind_China$`IRR % excl. CER`)
+describe(CDM_Wind_China$`IRR  % incl. CER`)
+describe(CDM_Wind_China$ChangeIRR)
+
+
+### n: the number of wind projects in China assumed
+n = 1614
+
+### Rbar: hurdle rate
+Rbar = 8 # around 8% based on Chinese wind projects
+
+### R0: inflection point
+  
+# unbiased regulation: R0 = Rbar 
+#R0 = rnorm(n, Rbar, 1)
+#hist(R0)
+# biased toward inclusion: R0 > Rbar
+#R0 = rnorm(n, Rbar+1, 1) #n,mean,sd
+# biased toward exclusion: R0 < Rbar
+#R0 = rnorm(n, Rbar-1, 1) #n,mean,sd
+
+# acceptance rate: 1512/1614 = 93.68%
+AcceptRate <- 1512/1614
+quantile(na.omit(CDM_Wind_China$`IRR % excl. CER`), probs = AcceptRate) #R0 = 7.02%
+
+R0 = quantile(na.omit(CDM_Wind_China$`IRR % excl. CER`), probs = AcceptRate)
+
+### R: the return on the project without offsets
+describe(CDM_Wind_China$`IRR % excl. CER`)
+#   vars    n mean   sd median trimmed  mad  min  max range  skew kurtosis   se
+#X1    1 1587  6.2 0.65   6.28    6.25 0.46 2.31 8.43  6.12 -1.12     3.42 0.02
+describe(CDM_Wind_China$`IRR % excl. CER`[CDM_Wind_China$`IRR % excl. CER` > quantile(CDM_Wind_China$`IRR % excl. CER`, 0.01, na.rm = TRUE) & CDM_Wind_China$`IRR % excl. CER` < quantile(CDM_Wind_China$`IRR % excl. CER`, 0.99, na.rm = TRUE)])
+#   vars    n mean   sd median trimmed  mad  min  max range  skew kurtosis   se
+#X1    1 1555 6.21 0.57   6.28    6.25 0.44 4.24 7.53  3.29 -0.74     0.89 0.01
+
+
+# Set the parameters based on your observed data
+mean_R <- mean(CDM_Wind_China$`IRR % excl. CER`[CDM_Wind_China$`IRR % excl. CER` > quantile(CDM_Wind_China$`IRR % excl. CER`, 0.01, na.rm = TRUE) & CDM_Wind_China$`IRR % excl. CER` < quantile(CDM_Wind_China$`IRR % excl. CER`, 0.99, na.rm = TRUE)], na.rm = TRUE)
+#mean_R <- 6.21
+
+sd_R <- sd(CDM_Wind_China$`IRR % excl. CER`[CDM_Wind_China$`IRR % excl. CER` > quantile(CDM_Wind_China$`IRR % excl. CER`, 0.01, na.rm = TRUE) & CDM_Wind_China$`IRR % excl. CER` < quantile(CDM_Wind_China$`IRR % excl. CER`, 0.99, na.rm = TRUE)], na.rm = TRUE)
+#sd_R <- 0.57
+
+#Assume half of them are non-additional but manipulate the data
+mean_r <- 8
+
+quantile(na.omit(CDM_Wind_China$`IRR % excl. CER`), probs = 0.5) #R = 6.28%
+8 - quantile(na.omit(CDM_Wind_China$`IRR % excl. CER`), probs = 0.5) # 8% - 6.18% = 1.72%
+
+R = rnorm(n, mean_R, sd_R) #bias = r - R = 8 - 6.2 = 1.8
+r = rnorm(n, mean_r, sd_R)
+bias = mean_r - mean_R
+
+hist(R, 
+     xlab = "Project return without offsets",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 50
+)
+
+hist(R, 
+     xlab = "Project return without offsets",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = seq(2, 10, by = 0.1)
+)
+hist(CDM_Wind_China$`IRR % excl. CER`, breaks = seq(2, 10, by = 0.1))
+
+
+  
+### FR: the value of carbon offsets, net of project costs, F(R)
+describe(CDM_Wind_China$ChangeIRR)
+#vars    n mean   sd median trimmed  mad  min  max range skew kurtosis   se
+#X1    1 1571 2.82 0.61   2.77    2.79 0.49 0.27 6.91  6.64 0.85     3.98 0.02
+describe(CDM_Wind_China$ChangeIRR[CDM_Wind_China$ChangeIRR > quantile(CDM_Wind_China$ChangeIRR, 0.01, na.rm = TRUE) & CDM_Wind_China$ChangeIRR < quantile(CDM_Wind_China$ChangeIRR, 0.99, na.rm = TRUE)])
+#   vars    n mean   sd median trimmed  mad  min  max range skew kurtosis   se
+#X1    1 1539 2.81 0.54   2.77    2.79 0.49 1.39 4.52  3.13 0.42     0.25 0.01
+
+mean_F <- mean(CDM_Wind_China$ChangeIRR[CDM_Wind_China$ChangeIRR > quantile(CDM_Wind_China$ChangeIRR, 0.01, na.rm = TRUE) & CDM_Wind_China$ChangeIRR < quantile(CDM_Wind_China$ChangeIRR, 0.99, na.rm = TRUE)], na.rm = TRUE)
+#mean_F <- 2.81
+sd_F <- sd(CDM_Wind_China$ChangeIRR[CDM_Wind_China$ChangeIRR > quantile(CDM_Wind_China$ChangeIRR, 0.01, na.rm = TRUE) & CDM_Wind_China$ChangeIRR < quantile(CDM_Wind_China$ChangeIRR, 0.99, na.rm = TRUE)], na.rm = TRUE)
+#sd_F <- 0.54
+
+FR = rnorm(n, mean_F, sd_F)
+
+hist(FR, 
+     xlab = "Project return without offsets",
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "black",
+     breaks = 50
+)
+
+hist(CDM_Wind_China$ChangeIRR, breaks = 50)
+
+hist(FR, breaks = seq(0.25, 7, by = 0.1),
+     col = "lightblue", border = "black", xlab = "Change in IRR")
+
+hist(CDM_Wind_China$ChangeIRR, breaks = seq(0.25, 7, by = 0.1),
+     col = "lightblue", border = "black", xlab = "Change in IRR")
+
+```
+
+# The main scenario
+In our main scenario we make the conservative but realistic assumption that the additional proportion and the crediting rate are both 0.5 and the policy hurdle rate is 8.73% with the regulatory accuracy of 2.5, given the registration rate of over 90% and the benchmark IRR of 8%.
+
+```{r baseline scenario}
+
+set.seed("1314520")
+
+mean_R <- 6.2
+sd_R <- 0.57
+
+mean_F <- 2.81
+sd_F <- 0.54
+
+mean_IC <- 66
+sd_IC <- 12
+
+mean_P <- 12.5
+sd_P <- 1
+
+MW <- 50
+yrs <- 7
+
+#the number of projects
+n = 100000
+
+corr_RF <- -0.3
+corr_RP <- -0.15
+corr_FP <- 0.2
+cov_matrix <- matrix(c(sd_R^2, corr_RF * sd_R * sd_F, corr_RP * sd_R * sd_P,
+                       corr_RF * sd_R * sd_F, sd_F^2, corr_FP * sd_F * sd_P,
+                       corr_RP * sd_R * sd_P, corr_FP * sd_F * sd_P, sd_P^2),
+                     nrow = 3)
+group1 <- mvrnorm(n, c(mean_R, mean_F, mean_P), cov_matrix)
+group1 <- as.data.frame(group1)
+colnames(group1) <- c("R", "FR", "P")
+cor(group1$R,group1$P)
+cor(group1$R,group1$FR)
+cor(group1$P,group1$FR)
+
+group1$Rbar <- 8
+group1$MW <- 50
+group1$yrs <- 7
+group1$IC <- rnorm(n,mean_IC,sd_IC)
+
+group1$d0 <- 0.5 
+group1$d1 <- group1$d0 #assume crediting rate equals additional proportion
+#group1$d1 <- group1$d0 - 0.2 #assume crediting rate is 0.2 lower than additional proportion
+group1$bias <- group1$Rbar - quantile(group1$R, probs = group1$d0)
+group1$RR <- group1$R + group1$bias
+group1$RplusF <- group1$R + group1$FR
+
+group1$CF <- (group1$IC*group1$R/100)/(1-(1+group1$R/100)^(-group1$yrs))
+#hist(group1$CF)
+
+group1$RealCF <- (group1$IC*group1$RR/100)/(1-(1+group1$RR/100)^(-group1$yrs))
+#hist(group1$RealCF)
+
+group1$CFplusCER <- (group1$IC*group1$RplusF/100)/(1-(1+group1$RplusF/100)^(-group1$yrs))
+#hist(group1$CFplusCER)
+
+group1$CER <- group1$CFplusCER - group1$CF
+#hist(group1$CER)
+summary(group1$CER)
+
+group1$RealCFplusCER <- group1$RealCF + group1$CER
+#hist(group1$RealCFplusCER)
+
+group1$CO2Red <- group1$CER*10^6/group1$P
+#hist(group1$CO2Red)
+
+group1$CER_d <- group1$CER*group1$d1
+group1$RealCFplusCER_d <- group1$RealCF + group1$CER_d
+
+
+group1$registrationfee <- calculate_registration_fee(group1$CO2Red)/10^6
+summary(group1$registrationfee)
+
+group1$developmentalfee <- 50000/10^6
+group1$validationfee <- 30000/10^6
+group1$totalfee <- group1$developmentalfee + group1$validationfee + group1$registrationfee
+summary(group1$totalfee)
+
+
+# Apply the IRR function to each row
+group1$RRplusF <- apply(group1, 1, function(x) {
+  tryCatch({
+    calculate_IRR(x['IC'], x['RealCFplusCER'], x['yrs'])
+  }, error = function(e) NA) # Return NA in case of error
+})
+
+group1$RRplusFnew <- apply(group1, 1, function(x) {
+  tryCatch({
+    calculate_IRR(x['IC'], x['RealCFplusCER_d'], x['yrs'])
+  }, error = function(e) NA) # Return NA in case of error
+})
+
+#The policy hurdle rate is around 0.9
+group1$AcceptRate <- 0.9 #biased
+group1$AcceptRate <- 0.5 #unbiased
+group1$R0 <- quantile(group1$RR, probs = group1$AcceptRate) #8.73%
+
+#The project is additional if the actual IRR is below the benchmark IRR.
+group1$add <- 0
+group1$add[group1$RR < group1$Rbar] <- 1
+describe(group1$add)
+
+# Assume k = 0 (random assignment), 2.5 (basically accurate), 25 (nearly perfect screening)
+group1$k <- 0
+group1$k <- 2.5
+group1$k <- 25
+
+# Calculate the probability of a successful application given the regulation function
+group1$q <- 0.9 #k=0 all projects has the same probability of acceptance.
+group1$q <- 1 - 1/(1+exp(-group1$k*(group1$RR - group1$R0)))
+
+# Calculate the present value of credit revenues
+group1$pvCER <- (group1$CER*100)*(1-(1+group1$Rbar/100)^(-group1$yrs))/group1$Rbar
+group1$pvCER_d <- (group1$CER_d*100)*(1-(1+group1$Rbar/100)^(-group1$yrs))/group1$Rbar
+
+summary(group1$pvCER)
+
+# Under current regime, the project developer only applies for offsets only if the discounted offset revenue is larger than the total application fee and the subsidized IRR is larger than the benchmark IRR.
+group1$s = ifelse(group1$pvCER*group1$q>group1$totalfee,
+                  ifelse(group1$RRplusF>group1$Rbar, 1, 0),
+                  0)
+summary(group1$s)
+
+par(mfrow = c(1, 1))
+
+# random regulation
+k0 <- ggplot(group1, aes(x = RR, y = q)) +
+  geom_point() +
+  labs(
+    title = "Random regulation (k=0, d=0.5, p=0.9)",
+    x = expression(R[0] * " (actual IRR without credit revenue)"),
+    y = "Probability of passing the tests"
+  ) +
+  theme_bw()
+k0
+ggsave("k0_0.9.pdf", plot = k0, width = 6, height = 3.5, dpi = 300)
+
+
+# biased and inaccurate regulation
+#pdf("k2.5.pdf", width = 6.8, height = 4.4)  
+#plot(group1$RR, group1$q,
+#     main = "Biased regulation (k=2.5)",
+#     xlab = expression(R[0] * " (actual IRR without credit revenue)"),
+#     ylab = "Probability of passing the tests")
+#dev.off()
+
+k2.5 <- ggplot(group1, aes(x = RR, y = q)) +
+  geom_point() +
+  labs(
+    title = "Inaccurate, biased (k=2.5, d=0.5, p=0.9)",
+    x = expression(R[0] * " (actual IRR without credit revenue)"),
+    y = "Probability of passing the tests"
+  ) +
+  theme_bw()
+k2.5
+ggsave("k2.5.pdf", plot = k2.5, width = 6, height = 3.5, dpi = 300)
+
+
+# inaccurate and unbiased regulation
+k2.5_unbiased <- ggplot(group1, aes(x = RR, y = q)) +
+  geom_point() +
+  labs(
+    title = "Inaccurate, unbiased (k=2.5, d=0.5, p=0.5)",
+    x = expression(R[0] * " (actual IRR without credit revenue)"),
+    y = "Probability of passing the tests"
+  ) +
+  theme_bw()
+k2.5_unbiased
+ggsave("k2.5_unbiased.pdf", plot = k2.5_unbiased, width = 6, height = 3.5, dpi = 300)
+
+# accurate and unbiased regulation
+k25 <- ggplot(group1, aes(x = RR, y = q)) +
+  geom_point() +
+  labs(
+    title = "Accurate, unbiased (k=25, d=0.5, p=0.5)",
+    x = expression(R[0] * " (actual IRR without credit revenue)"),
+    y = "Probability of passing the tests"
+  ) +
+  theme_bw()
+k25
+ggsave("k25.pdf", plot = k25, width = 6, height = 3.5, dpi = 300)
+
+
+# Under new regime, the project developer applies for offsets only if the discounted offset revenue is larger than the validation fee and the subsidized IRR is larger than the benchmark IRR.
+group1$s1 = ifelse(group1$pvCER_d>group1$validationfee,
+                   ifelse(group1$RRplusFnew>group1$Rbar, 1, 0),
+                   0)
+summary(group1$s1)
+table(group1$add,group1$s1)
+
+# The acceptance rate of individual projects depends on the probability of a successful application.
+group1$ac <- ifelse(runif(nrow(group1)) < group1$q, 1, 0)
+group1$ac[group1$s == 0] <- 0
+
+table(group1$add,group1$ac)
+
+group1$Type0[group1$s == 0 & group1$add == 0] <- "Non-offset"
+group1$Type0[group1$s == 0 & group1$add == 1] <- "Unattractive"
+group1$Type0[group1$s == 1 & group1$add == 1 & group1$ac == 1] <- "Rightly accepted"
+group1$Type0[group1$s == 1 & group1$add == 0 & group1$ac == 1] <- "Falsely accepted"
+group1$Type0[group1$s == 1 & group1$add == 1 & group1$ac == 0] <- "Falsely rejected"
+group1$Type0[group1$s == 1 & group1$add == 0 & group1$ac == 0] <- "Rightly rejected"
+
+table(group1$Type0)
+
+
+group1$Type1[group1$add == 0 & group1$s1 == 1] <- "Falsely accepted"
+group1$Type1[group1$add == 1 & group1$s1 == 1] <- "Rightly accepted"
+group1$Type1[group1$add == 1 & group1$s1 == 0] <- "Unattractive"
+
+table(group1$Type1)
+
+group1$Built0 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted",
+                                           "Non-offset","Rightly rejected"),1,0)
+group1$Built1 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),1,0)
+group1$BuiltChange = mean(group1$Built1) - mean(group1$Built0)
+
+group1$Invest0 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted",
+                                           "Non-offset","Rightly rejected"),group1$IC,0)
+group1$Invest1 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),group1$IC,0)
+group1$InvestChange = mean(group1$Invest1) - mean(group1$Invest0)
+
+
+group1$Trade0 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),group1$CER,0)
+group1$Trade1 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),group1$CER_d,0)
+mean(group1$Trade0)
+mean(group1$Trade1)
+group1$TradeChange = mean(group1$Trade1) - mean(group1$Trade0)
+summary(group1$TradeChange)
+
+group1$EmisRed0 <- ifelse(group1$Type0 %in% c("Rightly accepted"),
+                          group1$CO2Red,
+                          ifelse(group1$Type0 %in% c("Falsely accepted"), 
+                                 -group1$CO2Red,0))
+mean(group1$EmisRed0)
+group1$EmisRed1 <- ifelse(group1$Type1 %in% c("Rightly accepted"),
+                          group1$CO2Red,
+                          ifelse(group1$Type1 %in% c("Falsely accepted"), 
+                                 -group1$CO2Red*group1$d1,0))
+mean(group1$EmisRed1)
+group1$EmisRedChange = mean(group1$EmisRed1) - mean(group1$EmisRed0)
+summary(group1$EmisRedChange)
+
+group1$EmisRedperMUS0 <- sum(group1$EmisRed0)/sum(group1$Trade0)
+group1$EmisRedperMUS1 <- sum(group1$EmisRed1)/sum(group1$Trade1)
+group1$EmisRedperMUSChange <- group1$EmisRedperMUS1 - group1$EmisRedperMUS0
+summary(group1$EmisRedperMUSChange)
+summary(group1$EmisRedperMUS0)
+summary(group1$EmisRedperMUS1)
+
+describe(group1$RplusF)
+describe(group1$RRplusF)
+describe(group1$RRplusFnew)
+
+p0 <- ggplot(group1) +
+  geom_density(aes(x = R, fill = "Observed IRR without offsets"), color = "black", alpha = 0.9) +
+  geom_density(aes(x = RplusF, fill = "Observed IRR with offsets"), color = "black", alpha = 0.9) +
+  geom_vline(xintercept = 8, color = "black", linetype = "dashed", size = 0.7) +
+  scale_fill_manual(
+    name = "",  # 图例标题
+    values = c("Observed IRR with offsets" = "green","Observed IRR without offsets" = "blue")  # 自定义颜色
+  ) +
+  labs(title = "Reported IRRs", x = "IRR (%)", y = "Density") +
+  theme_bw() +
+  theme(
+    legend.position = c(0.82, 0.95),        
+    legend.title = element_text(size = 10), 
+    legend.text = element_text(size = 10),  
+    legend.background = element_blank(),  
+    legend.key = element_blank()
+  )
+print(p0) 
+ggsave("reported_IRRs.pdf", plot = p0, width = 7, height = 5, dpi = 300)
+
+p1 <- ggplot(group1) +
+  geom_density(aes(x = RR, fill = "Actual IRR without offsets"), color = "black", alpha = 0.9) +
+  geom_density(aes(x = RRplusF, fill = "Actual IRR with offsets"), color = "black", alpha = 0.9) +
+  geom_vline(xintercept = 8, color = "black", linetype = "dashed", size = 0.7) +
+  scale_fill_manual(
+    name = "",  
+    values = c("Actual IRR with offsets" = "lightgreen","Actual IRR without offsets" = "lightblue")
+  ) +
+  labs(title = "Actual IRRs", x = "IRR (%)", y = "Density") +
+  theme_bw() +
+  theme(
+    legend.position = c(0.82, 0.95),        
+    legend.title = element_text(size = 10), 
+    legend.text = element_text(size = 10),   
+    legend.background = element_blank(),  
+    legend.key = element_blank()
+  )
+print(p1) 
+ggsave("Actual_IRRs.pdf", plot = p1, width = 7, height = 5, dpi = 300)
+
+p2 <- ggplot(group1) +
+  geom_density(aes(x = R, fill = "Observed IRR without offsets"), color = "black", alpha = 0.9) +
+  geom_density(aes(x = RplusF, fill = "Observed IRR with offsets"), color = "black", alpha = 0.9) +
+  geom_density(aes(x = RR, fill = "Actual IRR without offsets"), color = "black", alpha = 0.9) +
+  geom_density(aes(x = RRplusF, fill = "Actual IRR with offsets"), color = "black", alpha = 0.9) +
+  geom_vline(xintercept = 8, color = "black", linetype = "dashed", size = 0.7) +
+  scale_fill_manual(
+    name = "",  # 图例标题
+    values = c("Observed IRR with offsets" = "green","Actual IRR with offsets" = "lightgreen","Observed IRR without offsets" = "blue","Actual IRR without offsets" = "lightblue")  # 自定义颜色
+  ) +
+  labs(title = "Comparison between observed and actual IRRs", x = "IRR (%)", y = "Density") +
+  theme_bw() +
+  theme(
+    legend.position = c(0.8, 0.91),        
+    legend.title = element_text(size = 10), 
+    legend.text = element_text(size = 10),  
+    legend.background = element_blank(),
+    legend.key = element_blank()
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) 
+print(p2) 
+ggsave("Comparison_IRRs.pdf", plot = p2, width = 7, height = 5, dpi = 300)
+
+p3 <- ggplot(group1) +
+  geom_density(aes(x = RR, fill = "Actual IRR without offsets"), color = "black", alpha = 0.9) +
+  geom_density(aes(x = RRplusF, fill = "Actual IRR with offsets"), color = "black", alpha = 0.9) +
+  geom_density(aes(x = RRplusFnew, fill = "Actual IRR with discounted offsets"), color = "black", alpha = 0.9) +
+  geom_vline(xintercept = 8, color = "black", linetype = "dashed", size = 0.7) +
+  scale_fill_manual(
+    name = "",  # 图例标题
+    values = c(
+      "Actual IRR with offsets" = "lightgreen",
+      "Actual IRR without offsets" = "lightblue",
+      "Actual IRR with discounted offsets" = "lightyellow"
+    )
+  ) +
+  labs(title = "Actual IRRs under the current and proposed regimes", x = "IRR (%)", y = "Density") +
+  theme_bw() +
+  theme(
+    legend.position = c(0.8, 0.91),       
+    legend.title = element_text(size = 10), 
+    legend.text = element_text(size = 10),  
+    legend.background = element_blank(),    
+    legend.key = element_blank()
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1)))
+print(p3)
+ggsave("Comparison_actualIRRs.pdf", plot = p3, width = 7, height = 5, dpi = 300)
+
+p4 <- ggplot(group1) +
+  geom_density(aes(x = R, fill = "Observed IRR without offsets"), color = "black", alpha = 0.9) +
+  geom_density(aes(x = RR, fill = "Actual IRR without offsets"), color = "black", alpha = 0.9) +
+  geom_vline(xintercept = 8, color = "black", linetype = "dashed", size = 0.7) +
+  scale_fill_manual(
+    name = "", 
+    values = c("Observed IRR without offsets" = "blue","Actual IRR without offsets" = "lightblue") 
+  ) +
+  labs(title = "Gaming behaviour", x = "IRR (%)", y = "Density") +
+  theme_bw() +
+  theme(
+    legend.position = c(0.82, 0.95),      
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 10),  
+    legend.background = element_blank(),
+    legend.key = element_blank()
+  )
+print(p4)
+ggsave("underreported_IRRs.pdf", plot = p4, width = 7, height = 5, dpi = 300)
+
+
+p5 <- ggplot(group1) +
+  geom_density(aes(x = R, fill = "Observed IRR without offsets"), color = "black", alpha = 0.9) +
+  geom_density(aes(x = RplusF, fill = "Observed IRR with offsets"), color = "black", alpha = 0.9) +
+  geom_density(aes(x = RR, fill = "Actual IRR without offsets"), color = "black", alpha = 0.9) +
+  geom_density(aes(x = RRplusF, fill = "Actual IRR with offsets"), color = "black", alpha = 0.9) +
+  geom_density(aes(x = RRplusFnew, fill = "Actual IRR with discounted offsets"), color = "black", alpha = 0.9) +
+  geom_vline(xintercept = 8, color = "black", linetype = "dashed", size = 0.7) +
+  scale_fill_manual(
+    name = "",  # 图例标题
+    values = c(
+      "Actual IRR with discounted offsets" = "lightyellow",
+      "Actual IRR with offsets" = "lightgreen",
+      "Actual IRR without offsets" = "lightblue",
+      "Observed IRR with offsets" = "green",
+      "Observed IRR without offsets" = "blue"
+    )
+  ) +
+  labs(title = "Observed and actual IRRs under the current and proposed regimes", x = "IRR (%)", y = "Density") +
+  theme_bw() +
+  theme(
+    legend.position = c(0.8, 0.91),       
+    legend.title = element_text(size = 10), 
+    legend.text = element_text(size = 10),  
+    legend.background = element_blank(),    
+    legend.key = element_blank()
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1)))
+print(p5)
+ggsave("Comparison_allIRRs.pdf", plot = p5, width = 10, height = 7, dpi = 300)
+
+
+#par(mfrow = c(1, 2), mar = c(3.9, 4, 1.8, 1), oma = c(0.5, 0.5, 0.5, 0.5))
+
+
+## categories of project outcomes under current regime
+group1_summary <- group1 %>%
+  group_by(Type0) %>%
+  summarise(count = n()) %>%
+  mutate(perc = count / sum(count))
+
+group1_summary <- group1_summary %>%
+  mutate(label = paste0(round(perc * 100,1), "%"))
+
+#baseline_k25 <- ggplot(group1_summary, aes(x = "", y = count, fill = Type0, label = label)) +
+#baseline_k2.5_unbiased <- ggplot(group1_summary, aes(x = "", y = count, fill = Type0, label = label)) +
+baseline_k0 <- ggplot(group1_summary, aes(x = "", y = count, fill = Type0, label = label)) +
+#baseline_k2.5 <- ggplot(group1_summary, aes(x = "", y = count, fill = Type0, label = label)) +
+  geom_bar(stat = "identity", width = 1) +
+  geom_label_repel(
+    aes(label = label),
+    position = position_stack(vjust = 0.5),
+    box.padding   = 0.25, 
+    point.padding = 0.25,
+    segment.color = 'grey50',
+    show.legend = FALSE
+  ) +
+  scale_y_continuous(breaks = NULL) +  
+  theme_minimal() +  
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    panel.grid  = element_blank(),
+    panel.border = element_blank(),
+    plot.background = element_rect(fill = "white", colour = "white"),
+    legend.key = element_blank(),
+    legend.background = element_blank(),
+    legend.box.background = element_blank(),
+    legend.position = "right"
+  ) +
+  labs(fill = "Project Outcomes", title = "Project outcomes under the current regime (k=0, d=0.5, p=0.9)", caption = "Source: CDM Wind in China") +
+  coord_polar(theta = "y", start = 0) +
+  scale_fill_manual(values = c("Rightly rejected" = "#1f78b4", 
+                               "Rightly accepted" = "#33a02c", 
+                               "Falsely accepted" = "#b2df8a", 
+                               "Falsely rejected" = "#a6cee3", 
+                               "Non-offset" = "grey50", 
+                               "Unattractive" ="grey"))
+print(baseline_k2.5)
+print(baseline_k0)
+print(baseline_k2.5_unbiased)
+print(baseline_k25)
+
+ggsave("baseline_k2.5.pdf", plot = baseline_k2.5, width = 6.8, height = 4, dpi = 300)
+ggsave("baseline_k0.pdf", plot = baseline_k0, width = 6.8, height = 4, dpi = 300)
+ggsave("baseline_k2.5_unbiased.pdf", plot = baseline_k2.5_unbiased, width = 6.8, height = 4, dpi = 300)
+ggsave("baseline_k25.pdf", plot = baseline_k25, width = 6.8, height = 4, dpi = 300)
+
+## categories of project outcomes under new regime
+group1_summary1 <- group1 %>%
+  group_by(Type1) %>%
+  summarise(count = n()) %>%
+  mutate(perc = count / sum(count))
+
+group1_summary1 <- group1_summary1 %>%
+  mutate(label = paste0(round(perc * 100,1), "%"))
+
+#baseline_new_0.3 <- ggplot(group1_summary1, aes(x = "", y = count, fill = Type1, label = label)) +
+baseline_new <- ggplot(group1_summary1, aes(x = "", y = count, fill = Type1, label = label)) +
+  geom_bar(stat = "identity", width = 1) +
+  geom_label_repel(
+    aes(label = label),
+    position = position_stack(vjust = 0.5),
+    box.padding   = 0.35, 
+    point.padding = 0.5,
+    segment.color = 'grey50',
+    show.legend = FALSE
+  ) +
+  scale_y_continuous(breaks = NULL) + 
+  theme_minimal() + 
+  theme(
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    panel.grid  = element_blank(),
+    panel.border = element_blank(),
+    plot.background = element_rect(fill = "white", colour = "white"),
+    legend.position = "right"
+  ) +
+  labs(fill = "Project Outcomes", title = "Project outcomes under the proposed regime (d=0.5, b=0.3)", caption = "Source: CDM Wind in China") +
+  coord_polar(theta = "y", start = 0) +
+  scale_fill_manual(values = c("Rightly accepted" = "#33a02c", "Falsely accepted" = "#b2df8a", "Unattractive" ="grey"))
+print(baseline_new)
+print(baseline_new_0.3)
+ggsave("baseline_new.pdf", plot = baseline_new, width = 6.8, height = 4, dpi = 300)
+ggsave("baseline_new_0.3.pdf", plot = baseline_new_0.3, width = 6.8, height = 4, dpi = 300)
+
+# check the correlation
+d <- group1 %>%
+  dplyr::select(CO2Red,IC,R,RplusF,FR,P) %>%
+  dplyr::filter(MW < 100)
+
+corr1 <- round(cor(d, use = "pairwise.complete.obs"), 2)
+ggcorrplot(corr1, hc.order = TRUE, 
+           type = "lower", 
+           lab = TRUE, 
+           lab_size = 3, 
+           method="circle", 
+           colors = c("tomato2", "white", "springgreen3"), 
+#           title="Correlogram of wind plant parameters", 
+           ggtheme=theme_bw)
+
+
+```
+
+
+# Sensitivity analysis
+
+```{r sensitivity analysis}
+
+# Define the ranges and steps for k and d0
+k_values <- seq(0, 10, by = 0.5)
+d0_values <- seq(0, 1, by = 0.05)
+AcceptRate_values <- seq(0, 1, by = 0.05)
+# Initialize a data frame to store results
+results1 <- expand.grid(k = k_values, d0 = d0_values, AcceptRate = AcceptRate_values)
+results1$mean_built_change <- NA
+results1$mean_trade_change <- NA
+results1$mean_emis_red_change <- NA
+results1$emis_red_per_tradeMUS <- NA
+
+set.seed("384617")
+
+n = 10000
+
+# Define the ranges and steps for k and d0
+k_values <- seq(0, 10, by = 0.5)
+d_values <- seq(0, 1, by = 0.05)
+acr_values <- seq(0, 1, by = 0.05)
+# Initialize a data frame to store results
+wind_cn_0.5 <- expand.grid(k = k_values, d = d_values, acr = acr_values)
+wind_cn_0.5$d0 <- 0.5
+wind_cn_0.5$bias <- NA
+wind_cn_0.5$mean_built_change <- NA
+wind_cn_0.5$mean_trade_change <- NA
+wind_cn_0.5$mean_emis_red_change <- NA
+wind_cn_0.5$emis_red_per_tradeMUS <- NA
+
+set.seed(38461)
+
+n = 10000
+
+# Run the simulations
+for (k_val in k_values) {
+  for (d_val in d_values) {
+    for (acr_val in acr_values) {
+      corr_RF <- -0.3
+      corr_RP <- -0.15
+      corr_FP <- 0.2
+      cov_matrix <- matrix(c(sd_R^2, corr_RF * sd_R * sd_F, corr_RP * sd_R * sd_P,
+                             corr_RF * sd_R * sd_F, sd_F^2, corr_FP * sd_F * sd_P,
+                             corr_RP * sd_R * sd_P, corr_FP * sd_F * sd_P, sd_P^2),
+                           nrow = 3)
+      group1 <- mvrnorm(n, c(mean_R, mean_F, mean_P), cov_matrix)
+      group1 <- as.data.frame(group1)
+      colnames(group1) <- c("R", "FR", "P")
+      
+      group1$Rbar <- 8
+      group1$MW <- 50
+      group1$yrs <- 7
+      group1$IC <- rnorm(n,mean_IC,sd_IC)
+      
+      group1$d0 <- 0.5
+      group1$d1 <- d_val
+      group1$g <- group1$Rbar - quantile(group1$R, probs = group1$d0)
+      group1$RR <- group1$R + group1$g
+      group1$RplusF <- group1$R + group1$FR
+      
+      group1$CF <- (group1$IC*group1$R/100)/(1-(1+group1$R/100)^(-group1$yrs))
+      group1$RealCF <- (group1$IC*group1$RR/100)/(1-(1+group1$RR/100)^(-group1$yrs))
+      
+      group1$CFplusCER <- (group1$IC*group1$RplusF/100)/(1-(1+group1$RplusF/100)^(-group1$yrs))
+      
+      group1$CER <- group1$CFplusCER - group1$CF
+      group1$RealCFplusCER <- group1$RealCF + group1$CER
+      
+      group1$CO2Red <- group1$CER*10^6/group1$P
+      
+      group1$CER_d <- group1$CER*group1$d1
+      group1$RealCFplusCER_d <- group1$RealCF + group1$CER_d
+      
+      group1$registrationfee <- calculate_registration_fee(group1$CO2Red)/10^6
+      group1$developmentalfee <- 40000/10^6
+      group1$validationfee <- 30000/10^6
+      group1$totalfee <- group1$developmentalfee + group1$validationfee + group1$registrationfee
+      
+      
+      # Apply the IRR function to each row
+      group1$RRplusF <- apply(group1, 1, function(x) {
+        calculate_IRR(x['IC'], x['RealCFplusCER'], x['yrs'])
+      })
+      
+      group1$RRplusFnew <- apply(group1, 1, function(x) {
+        calculate_IRR(x['IC'], x['RealCFplusCER_d'], x['yrs'])
+      })
+      
+      group1$AcceptRate <- acr_val
+      group1$R0 <- quantile(group1$RR, probs = acr_val)
+      group1$bias <- group1$Rbar - group1$R0
+      
+      group1$add <- 0
+      group1$add[group1$RR < group1$Rbar] <- 1
+      
+      group1$k <- k_val
+      group1$q <- 1 - 1/(1+exp(-k_val*(group1$RR - group1$R0)))
+      group1$pvCER <- (group1$CER*100)*(1-(1+group1$Rbar/100)^(-group1$yrs))/group1$Rbar
+      group1$pvCER_d <- (group1$CER_d*100)*(1-(1+group1$Rbar/100)^(-group1$yrs))/group1$Rbar
+      
+      group1$s = ifelse(group1$pvCER*group1$q>group1$totalfee,
+                        ifelse(group1$RRplusF>group1$Rbar, 1, 0),
+                        0)
+      
+      group1$s1 = ifelse(group1$pvCER_d>group1$validationfee,
+                         ifelse(group1$RRplusFnew>group1$Rbar, 1, 0),
+                         0)
+      
+      group1$ac <- ifelse(runif(nrow(group1)) < group1$q, 1, 0)
+      group1$ac[group1$s == 0] <- 0
+      
+      group1$Type0[group1$s == 0 & group1$add == 0] <- "Non-offset"
+      group1$Type0[group1$s == 0 & group1$add == 1] <- "Unattractive"
+      group1$Type0[group1$s == 1 & group1$add == 1 & group1$ac == 1] <- "Rightly accepted"
+      group1$Type0[group1$s == 1 & group1$add == 0 & group1$ac == 1] <- "Falsely accepted"
+      group1$Type0[group1$s == 1 & group1$add == 1 & group1$ac == 0] <- "Falsely rejected"
+      group1$Type0[group1$s == 1 & group1$add == 0 & group1$ac == 0] <- "Rightly rejected"
+      
+      group1$Type1[group1$add == 0 & group1$s1 == 1] <- "Falsely accepted"
+      group1$Type1[group1$add == 1 & group1$s1 == 1] <- "Rightly accepted"
+      group1$Type1[group1$add == 1 & group1$s1 == 0] <- "Unattractive"
+      
+      
+      group1$Built0 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted",
+                                                 "Non-offset","Rightly rejected"),1,0)
+      
+      group1$Built1 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),1,0)
+      group1$BuiltChange = mean(group1$Built1) - mean(group1$Built0)
+      
+      group1$Invest0 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted",
+                                                  "Non-offset","Rightly rejected"),group1$IC,0)
+      group1$Invest1 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),group1$IC,0)
+      group1$InvestChange = mean(group1$Invest1) - mean(group1$Invest0)
+      
+      group1$Trade0 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),group1$CER,0)
+      group1$Trade1 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),group1$CER_d,0)
+      group1$TradeChange = mean(group1$Trade1) - mean(group1$Trade0)
+      
+      group1$EmisRed0 <- ifelse(group1$Type0 %in% c("Rightly accepted"),
+                                group1$CO2Red,
+                                ifelse(group1$Type0 %in% c("Falsely accepted"), 
+                                       -group1$CO2Red,0))
+      group1$EmisRed1 <- ifelse(group1$Type1 %in% c("Rightly accepted"),
+                                group1$CO2Red,
+                                ifelse(group1$Type1 %in% c("Falsely accepted"), 
+                                       -group1$CO2Red*group1$d1,0))
+      group1$EmisRedChange = mean(group1$EmisRed1) - mean(group1$EmisRed0)
+      
+      group1$EmisRedperMUS0 <- sum(group1$EmisRed0)/sum(group1$Trade0)
+      group1$EmisRedperMUS1 <- sum(group1$EmisRed1)/sum(group1$Trade1)
+      group1$EmisRedperMUSChange <- group1$EmisRedperMUS1 - group1$EmisRedperMUS0
+      
+      
+      # Example: Store the mean of BuiltChange and EmisRedChange for the current combination
+      wind_cn_0.5[wind_cn_0.5$k == k_val & wind_cn_0.5$d == d_val & wind_cn_0.5$acr == acr_val, "bias"] <- mean(group1$bias)
+      wind_cn_0.5[wind_cn_0.5$k == k_val & wind_cn_0.5$d == d_val & wind_cn_0.5$acr == acr_val, "mean_built_change"] <- mean(group1$BuiltChange)
+      wind_cn_0.5[wind_cn_0.5$k == k_val & wind_cn_0.5$d == d_val & wind_cn_0.5$acr == acr_val, "mean_trade_change"] <- mean(group1$TradeChange)
+      wind_cn_0.5[wind_cn_0.5$k == k_val & wind_cn_0.5$d == d_val & wind_cn_0.5$acr == acr_val, "mean_emis_red_change"] <- mean(group1$EmisRedChange)
+      wind_cn_0.5[wind_cn_0.5$k == k_val & wind_cn_0.5$d == d_val & wind_cn_0.5$acr == acr_val, "emis_red_per_tradeMUS"] <- mean(group1$EmisRedperMUSChange)
+      
+    }
+  }
+}
+
+# View the results
+print(wind_cn_0.5)
+write_rds(wind_cn_0.5, "./Data/simulation/wind_cn_0.5.rds")
+
+
+
+
+# Define the ranges and steps for k and d0
+k_values <- seq(0, 10, by = 0.5)
+d0_values <- seq(0, 1, by = 0.05)
+d_values <- seq(0, 1, by = 0.05)
+# Initialize a data frame to store results
+wind_cn_ac0.9 <- expand.grid(k = k_values, d0 = d0_values, d = d_values)
+wind_cn_ac0.9$mean_built_change <- NA
+wind_cn_ac0.9$mean_trade_change <- NA
+wind_cn_ac0.9$mean_emis_red_change <- NA
+wind_cn_ac0.9$emis_red_per_tradeMUS <- NA
+
+set.seed(38462)
+
+n = 10000
+
+# Run the simulations
+for (k_val in k_values) {
+  for (d0_val in d0_values) {
+    for (d_val in d_values) {
+      corr_RF <- -0.3
+      corr_RP <- -0.15
+      corr_FP <- 0.2
+      cov_matrix <- matrix(c(sd_R^2, corr_RF * sd_R * sd_F, corr_RP * sd_R * sd_P,
+                             corr_RF * sd_R * sd_F, sd_F^2, corr_FP * sd_F * sd_P,
+                             corr_RP * sd_R * sd_P, corr_FP * sd_F * sd_P, sd_P^2),
+                           nrow = 3)
+      group1 <- mvrnorm(n, c(mean_R, mean_F, mean_P), cov_matrix)
+      group1 <- as.data.frame(group1)
+      colnames(group1) <- c("R", "FR", "P")
+      
+      group1$Rbar <- 8
+      group1$MW <- 50
+      group1$yrs <- 7
+      group1$IC <- rnorm(n,mean_IC,sd_IC)
+      
+      group1$d0 <- d0_val
+      group1$d1 <- d_val
+      group1$g <- group1$Rbar - quantile(group1$R, probs = group1$d0)
+      group1$RR <- group1$R + group1$g
+      group1$RplusF <- group1$R + group1$FR
+      
+      group1$CF <- (group1$IC*group1$R/100)/(1-(1+group1$R/100)^(-group1$yrs))
+      group1$RealCF <- (group1$IC*group1$RR/100)/(1-(1+group1$RR/100)^(-group1$yrs))
+      
+      group1$CFplusCER <- (group1$IC*group1$RplusF/100)/(1-(1+group1$RplusF/100)^(-group1$yrs))
+      
+      group1$CER <- group1$CFplusCER - group1$CF
+      group1$RealCFplusCER <- group1$RealCF + group1$CER
+      
+      group1$CO2Red <- group1$CER*10^6/group1$P
+      
+      group1$CER_d <- group1$CER*group1$d1
+      group1$RealCFplusCER_d <- group1$RealCF + group1$CER_d
+      
+      group1$registrationfee <- calculate_registration_fee(group1$CO2Red)/10^6
+      group1$developmentalfee <- 40000/10^6
+      group1$validationfee <- 30000/10^6
+      group1$totalfee <- group1$developmentalfee + group1$validationfee + group1$registrationfee
+      
+      
+      # Apply the IRR function to each row
+      group1$RRplusF <- apply(group1, 1, function(x) {
+        calculate_IRR(x['IC'], x['RealCFplusCER'], x['yrs'])
+      })
+      
+      group1$RRplusFnew <- apply(group1, 1, function(x) {
+        calculate_IRR(x['IC'], x['RealCFplusCER_d'], x['yrs'])
+      })
+      
+      group1$AcceptRate <- 0.9
+      group1$R0 <- quantile(group1$RR, probs = 0.9)
+      group1$bias <- group1$Rbar - group1$R0
+      
+      group1$add <- 0
+      group1$add[group1$RR < group1$Rbar] <- 1
+      
+      group1$k <- k_val
+      group1$q <- 1 - 1/(1+exp(-k_val*(group1$RR - group1$R0)))
+      group1$pvCER <- (group1$CER*100)*(1-(1+group1$Rbar/100)^(-group1$yrs))/group1$Rbar
+      group1$pvCER_d <- (group1$CER_d*100)*(1-(1+group1$Rbar/100)^(-group1$yrs))/group1$Rbar
+      
+      group1$s = ifelse(group1$pvCER*group1$q>group1$totalfee,
+                        ifelse(group1$RRplusF>group1$Rbar, 1, 0),
+                        0)
+      
+      group1$s1 = ifelse(group1$pvCER_d>group1$validationfee,
+                         ifelse(group1$RRplusFnew>group1$Rbar, 1, 0),
+                         0)
+      
+      group1$ac <- ifelse(runif(nrow(group1)) < group1$q, 1, 0)
+      group1$ac[group1$s == 0] <- 0
+      
+      group1$Type0[group1$s == 0 & group1$add == 0] <- "Non-offset"
+      group1$Type0[group1$s == 0 & group1$add == 1] <- "Unattractive"
+      group1$Type0[group1$s == 1 & group1$add == 1 & group1$ac == 1] <- "Rightly accepted"
+      group1$Type0[group1$s == 1 & group1$add == 0 & group1$ac == 1] <- "Falsely accepted"
+      group1$Type0[group1$s == 1 & group1$add == 1 & group1$ac == 0] <- "Falsely rejected"
+      group1$Type0[group1$s == 1 & group1$add == 0 & group1$ac == 0] <- "Rightly rejected"
+      
+      group1$Type1[group1$add == 0 & group1$s1 == 1] <- "Falsely accepted"
+      group1$Type1[group1$add == 1 & group1$s1 == 1] <- "Rightly accepted"
+      group1$Type1[group1$add == 1 & group1$s1 == 0] <- "Unattractive"
+      
+      
+      group1$Built0 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted",
+                                                 "Non-offset","Rightly rejected"),1,0)
+      
+      group1$Built1 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),1,0)
+      group1$BuiltChange = mean(group1$Built1) - mean(group1$Built0)
+      
+      group1$Invest0 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted",
+                                                  "Non-offset","Rightly rejected"),group1$IC,0)
+      group1$Invest1 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),group1$IC,0)
+      group1$InvestChange = mean(group1$Invest1) - mean(group1$Invest0)
+      
+      group1$Trade0 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),group1$CER,0)
+      group1$Trade1 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),group1$CER_d,0)
+      group1$TradeChange = mean(group1$Trade1) - mean(group1$Trade0)
+      
+      group1$EmisRed0 <- ifelse(group1$Type0 %in% c("Rightly accepted"),
+                                group1$CO2Red,
+                                ifelse(group1$Type0 %in% c("Falsely accepted"), 
+                                       -group1$CO2Red,0))
+      group1$EmisRed1 <- ifelse(group1$Type1 %in% c("Rightly accepted"),
+                                group1$CO2Red,
+                                ifelse(group1$Type1 %in% c("Falsely accepted"), 
+                                       -group1$CO2Red*group1$d1,0))
+      group1$EmisRedChange = mean(group1$EmisRed1) - mean(group1$EmisRed0)
+      
+      group1$EmisRedperMUS0 <- sum(group1$EmisRed0)/sum(group1$Trade0)
+      group1$EmisRedperMUS1 <- sum(group1$EmisRed1)/sum(group1$Trade1)
+      group1$EmisRedperMUSChange <- group1$EmisRedperMUS1 - group1$EmisRedperMUS0
+      
+      
+      # Example: Store the mean of BuiltChange and EmisRedChange for the current combination
+      wind_cn_ac0.9[wind_cn_ac0.9$k == k_val & wind_cn_ac0.9$d0 == d0_val & wind_cn_ac0.9$d == d_val, "mean_built_change"] <- mean(group1$BuiltChange)
+      wwind_cn_ac0.9[wind_cn_ac0.9$k == k_val & wind_cn_ac0.9$d0 == d0_val & wind_cn_ac0.9$d == d_val, "mean_trade_change"] <- mean(group1$TradeChange)
+      wind_cn_ac0.9[wind_cn_ac0.9$k == k_val & wind_cn_ac0.9$d0 == d0_val & wind_cn_ac0.9$d == d_val, "mean_emis_red_change"] <- mean(group1$EmisRedChange)
+      wind_cn_ac0.9[wind_cn_ac0.9$k == k_val & wind_cn_ac0.9$d0 == d0_val & wind_cn_ac0.9$d == d_val, "emis_red_per_tradeMUS"] <- mean(group1$EmisRedperMUSChange)
+      
+    }
+  }
+}
+
+# View the results
+print(wind_cn_ac0.9)
+
+write_rds(wind_cn_ac0.9, "./Data/simulation/wind_cn_ac0.9.rds")
+
+
+
+###### sd
+
+# Define the ranges and steps for k and d0
+d_values <- seq(0, 1, by = 0.05)
+sdR_values <- seq(0, 2, by = 0.1)
+# Initialize a data frame to store results
+wind_cn_sd <- expand.grid(d = d_values, sdR = sdR_values)
+wind_cn_sd$d0 <- 0.5
+wind_cn_sd$mean_built_change <- NA
+wind_cn_sd$mean_trade_change <- NA
+wind_cn_sd$mean_emis_red_change <- NA
+wind_cn_sd$emis_red_per_tradeMUS <- NA
+
+set.seed("384622")
+
+n = 10000
+
+# Run the simulations
+for (d_val in d_values) {
+  for (sdR_val in sdR_values) {
+      sd_R <- sdR_val
+      corr_RF <- -0.3
+      corr_RP <- -0.15
+      corr_FP <- 0.2
+      cov_matrix <- matrix(c(sd_R^2, corr_RF * sd_R * sd_F, corr_RP * sd_R * sd_P,
+                             corr_RF * sd_R * sd_F, sd_F^2, corr_FP * sd_F * sd_P,
+                             corr_RP * sd_R * sd_P, corr_FP * sd_F * sd_P, sd_P^2),
+                           nrow = 3)
+      group1 <- mvrnorm(n, c(mean_R, mean_F, mean_P), cov_matrix)
+      group1 <- as.data.frame(group1)
+      colnames(group1) <- c("R", "FR", "P")
+      
+      group1$Rbar <- 8
+      group1$MW <- 50
+      group1$yrs <- 7
+      group1$IC <- rnorm(n,mean_IC,sd_IC)
+      
+      group1$d0 <- 0.5
+      group1$d1 <- d_val
+      group1$g <- group1$Rbar - quantile(group1$R, probs = group1$d0)
+      group1$RR <- group1$R + group1$g
+      group1$RplusF <- group1$R + group1$FR
+      
+      group1$CF <- (group1$IC*group1$R/100)/(1-(1+group1$R/100)^(-group1$yrs))
+      group1$RealCF <- (group1$IC*group1$RR/100)/(1-(1+group1$RR/100)^(-group1$yrs))
+      
+      group1$CFplusCER <- (group1$IC*group1$RplusF/100)/(1-(1+group1$RplusF/100)^(-group1$yrs))
+      
+      group1$CER <- group1$CFplusCER - group1$CF
+      group1$RealCFplusCER <- group1$RealCF + group1$CER
+      
+      group1$CO2Red <- group1$CER*10^6/group1$P
+      
+      group1$CER_d <- group1$CER*group1$d1
+      group1$RealCFplusCER_d <- group1$RealCF + group1$CER_d
+      
+      group1$registrationfee <- calculate_registration_fee(group1$CO2Red)/10^6
+      group1$developmentalfee <- 50000/10^6
+      group1$validationfee <- 30000/10^6
+      group1$totalfee <- group1$developmentalfee + group1$validationfee + group1$registrationfee
+      
+      
+      # Apply the IRR function to each row
+      group1$RRplusF <- apply(group1, 1, function(x) {
+        calculate_IRR(x['IC'], x['RealCFplusCER'], x['yrs'])
+      })
+      
+      group1$RRplusFnew <- apply(group1, 1, function(x) {
+        calculate_IRR(x['IC'], x['RealCFplusCER_d'], x['yrs'])
+      })
+      
+      group1$AcceptRate <- 0.9
+      group1$R0 <- quantile(group1$RR, probs = 0.9)
+      group1$bias <- group1$Rbar - group1$R0
+      
+      group1$add <- 0
+      group1$add[group1$RR < group1$Rbar] <- 1
+      
+      group1$k <- 2.5
+      group1$q <- 1 - 1/(1+exp(-group1$k*(group1$RR - group1$R0)))
+      group1$pvCER <- (group1$CER*100)*(1-(1+group1$Rbar/100)^(-group1$yrs))/group1$Rbar
+      group1$pvCER_d <- (group1$CER_d*100)*(1-(1+group1$Rbar/100)^(-group1$yrs))/group1$Rbar
+      
+      group1$s = ifelse(group1$pvCER*group1$q>group1$totalfee,
+                        ifelse(group1$RRplusF>group1$Rbar, 1, 0),
+                        0)
+      
+      group1$s1 = ifelse(group1$pvCER_d>group1$validationfee,
+                         ifelse(group1$RRplusFnew>group1$Rbar, 1, 0),
+                         0)
+      
+      group1$ac <- ifelse(runif(nrow(group1)) < group1$q, 1, 0)
+      group1$ac[group1$s == 0] <- 0
+      
+      group1$Type0[group1$s == 0 & group1$add == 0] <- "Non-offset"
+      group1$Type0[group1$s == 0 & group1$add == 1] <- "Unattractive"
+      group1$Type0[group1$s == 1 & group1$add == 1 & group1$ac == 1] <- "Rightly accepted"
+      group1$Type0[group1$s == 1 & group1$add == 0 & group1$ac == 1] <- "Falsely accepted"
+      group1$Type0[group1$s == 1 & group1$add == 1 & group1$ac == 0] <- "Falsely rejected"
+      group1$Type0[group1$s == 1 & group1$add == 0 & group1$ac == 0] <- "Rightly rejected"
+      
+      group1$Type1[group1$add == 0 & group1$s1 == 1] <- "Falsely accepted"
+      group1$Type1[group1$add == 1 & group1$s1 == 1] <- "Rightly accepted"
+      group1$Type1[group1$add == 1 & group1$s1 == 0] <- "Unattractive"
+      
+      
+      group1$Built0 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted",
+                                                 "Non-offset","Rightly rejected"),1,0)
+      
+      group1$Built1 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),1,0)
+      group1$BuiltChange = mean(group1$Built1) - mean(group1$Built0)
+      
+      group1$Invest0 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted",
+                                                  "Non-offset","Rightly rejected"),group1$IC,0)
+      group1$Invest1 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),group1$IC,0)
+      group1$InvestChange = mean(group1$Invest1) - mean(group1$Invest0)
+      
+      group1$Trade0 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),group1$CER,0)
+      group1$Trade1 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),group1$CER_d,0)
+      group1$TradeChange = mean(group1$Trade1) - mean(group1$Trade0)
+      
+      group1$EmisRed0 <- ifelse(group1$Type0 %in% c("Rightly accepted"),
+                                group1$CO2Red,
+                                ifelse(group1$Type0 %in% c("Falsely accepted"), 
+                                       -group1$CO2Red,0))
+      group1$EmisRed1 <- ifelse(group1$Type1 %in% c("Rightly accepted"),
+                                group1$CO2Red,
+                                ifelse(group1$Type1 %in% c("Falsely accepted"), 
+                                       -group1$CO2Red*group1$d1,0))
+      group1$EmisRedChange = mean(group1$EmisRed1) - mean(group1$EmisRed0)
+      
+      group1$EmisRedperMUS0 <- sum(group1$EmisRed0)/sum(group1$Trade0)
+      group1$EmisRedperMUS1 <- sum(group1$EmisRed1)/sum(group1$Trade1)
+      group1$EmisRedperMUSChange <- group1$EmisRedperMUS1 - group1$EmisRedperMUS0
+      
+      
+      # Example: Store the mean of BuiltChange and EmisRedChange for the current combination
+      wind_cn_sd[wind_cn_sd$d == d_val & wind_cn_sd$sdR == sdR_val, "bias"] <- mean(group1$bias)
+      wind_cn_sd[wind_cn_sd$d == d_val & wind_cn_sd$sdR == sdR_val, "mean_built_change"] <- mean(group1$BuiltChange)
+      wind_cn_sd[wind_cn_sd$d == d_val & wind_cn_sd$sdR == sdR_val, "mean_trade_change"] <- mean(group1$TradeChange)
+      wind_cn_sd[wind_cn_sd$d == d_val & wind_cn_sd$sdR == sdR_val, "mean_emis_red_change"] <- mean(group1$EmisRedChange)
+      wind_cn_sd[wind_cn_sd$d == d_val & wind_cn_sd$sdR == sdR_val, "emis_red_per_tradeMUS"] <- mean(group1$EmisRedperMUSChange)
+      
+  }
+}
+
+# View the results
+print(wind_cn_sd)
+
+write_rds(wind_cn_sd, "./Data/simulation/wind_cn_sd.rds")
+
+```
+
+
+
+
+```{r wind_cn_0.5}
+
+wind_cn_0.5 <- read_rds("./Data/simulation/wind_cn_0.5.rds")
+wind_cn_ac0.9 <- read_rds("./Data/simulation/wind_cn_ac0.9.rds")
+wind_cn_sd <- read_rds("./Data/simulation/wind_cn_sd.rds")
+
+wind_cn_0.5$dp <- wind_cn_0.5$acr - 0.5
+
+
+fig1 <- plot_ly(wind_cn_0.5, x = ~k, y = ~dp, z = ~d, color = ~mean_trade_change, type = "scatter3d", mode = "markers")
+fig2 <- plot_ly(wind_cn_0.5, x = ~k, y = ~dp, z = ~d, color = ~mean_emis_red_change, type = "scatter3d", mode = "markers")
+fig3 <- plot_ly(wind_cn_0.5, x = ~k, y = ~dp, z = ~d, color = ~emis_red_per_tradeMUS, type = "scatter3d", mode = "markers")
+
+# Customize the layout
+fig1 %>% layout(
+#  title = "Change in Annual Offset Trade Volume (Million USD/project)",
+  scene = list(
+    xaxis = list(title = "regulatory accuracy (k)"),
+    yaxis = list(title = "regulatory bias (p-d)"),
+    zaxis = list(title = "crediting rate (b)"),
+    coloraxis = list(title = "diff in revenue (MUSD)")
+  )
+)
+
+layout_update1 <- list(
+  title = "3D Surface Plot for Annual Offset Trade Volume (Million USD/project)",
+  scene = list(
+    xaxis = list(title = "regulation accuracy"),
+    yaxis = list(title = "regulation bias"),
+    zaxis = list(title = "subsidy rate"),
+    colorbar = list(title = "diff in revenue (MUSD)")
+  )
+)
+fig1 %>% layout(layout_update1)
+
+
+# Customize the layout
+fig2 %>% layout(
+#  title = "Change in Annual Carbon Emissions Reduction (tCO2e/project)",
+  scene = list(
+    xaxis = list(title = "regulatory accuracy (k)"),
+    yaxis = list(title = "regulatory bias (p-d)"),
+    zaxis = list(title = "crediting rate (b)")
+  )
+)
+
+# Customize the layout
+fig3 %>% layout(
+  title = "3D Surface Plot for Annual Carbon Emissions Reduction Efficiency (Tonnes CO2/One Million USD)",
+  scene = list(
+    xaxis = list(title = "k (accuracy)"),
+    yaxis = list(title = "dp - d0 (biasedness)"),
+    zaxis = list(title = "d (subsidy rate)")
+  )
+)
+
+wind_cn_ac0.9_k2.5 <- dplyr::filter(wind_cn_ac0.9, k == 2.5)
+wind_cn_0.5_d0.5 <- dplyr::filter(wind_cn_0.5, d == 0.5)
+wind_cn_0.5_ac0.9 <- dplyr::filter(wind_cn_0.5, acr == 0.9)
+wind_cn_0.5_k2.5 <- dplyr::filter(wind_cn_0.5, k == 2.5)
+
+
+f1 <- ggplot(wind_cn_0.5_d0.5, aes(x = k, y = dp, z = mean_trade_change)) + 
+  geom_contour_filled() + 
+  labs(title = "Annual offset trade volume (million USD/project)",
+       x = "regulation accuracy (k)", y = "regulation bias (p-d)", fill = "diff in revenue (MUSD)") +
+  theme_bw()
+f1
+ggsave("./Figures/f_bias_accuracy_trade.pdf", plot = f1, width = 6.8, height = 4.8, dpi = 300)
+
+f2 <- ggplot(wind_cn_0.5_d0.5, aes(x = k, y = dp, z = mean_emis_red_change)) + 
+  geom_contour_filled() + 
+  labs(title = "Annual carbon emissions reduction (tCO2e/project)",
+       x = "regulation accuracy (k)", y = "regulation bias (p-d)", fill = "diff in emissions reduction") +
+  theme_bw()
+f2
+ggsave("./Figures/f_bias_accuracy_emis.pdf", plot = f2, width = 6.8, height = 4.8, dpi = 300)
+
+
+f3 <- ggplot(wind_cn_0.5_ac0.9, aes(x = k, y = d, z = mean_trade_change)) + 
+  geom_contour_filled() + 
+  labs(title = "Annual offset trade volume (million USD/project)",
+       x = "regulation accuracy (k)", y = "crediting rate (b)", fill = "diff in revenue (MUSD)") +
+  theme_bw()
+f3
+ggsave("./Figures/f_accuracy_cred_trade.pdf", plot = f3, width = 6.8, height = 4.8, dpi = 300)
+
+f4 <- ggplot(wind_cn_0.5_ac0.9, aes(x = k, y = d, z = mean_emis_red_change)) + 
+  geom_contour_filled() + 
+  labs(title = "Annual carbon emissions reduction (tCO2e/project)",
+       x = "regulation accuracy (k)", y = "crediting rate (b)", fill = "diff in emissions reduction") +
+  theme_bw()
+f4
+ggsave("./Figures/f_accuracy_cred_emis.pdf", plot = f4, width = 6.8, height = 4.8, dpi = 300)
+
+
+f5 <- ggplot(wind_cn_0.5_k2.5, aes(x = dp, y = d, z = mean_trade_change)) + 
+  geom_contour_filled() + 
+  labs(title = "Annual offset trade volume (million USD/project)",
+       x = "regulation bias (p-d)", y = "crediting rate (b)", fill = "diff in revenue (MUSD)") +
+  theme_bw()
+f5
+ggsave("./Figures/f_bias_cred_trade.pdf", plot = f5, width = 6.8, height = 4.8, dpi = 300)
+
+f6 <- ggplot(wind_cn_0.5_k2.5, aes(x = dp, y = d, z = mean_emis_red_change)) + 
+  geom_contour_filled() + 
+  labs(title = "Annual carbon emissions reduction (tCO2e/project)",
+       x = "regulation bias (p-d)", y = "crediting rate (b)", fill = "diff in emissions reduction") +
+  theme_bw()
+f6
+ggsave("./Figures/f_bias_cred_emis.pdf", plot = f6, width = 6.8, height = 4.8, dpi = 300)
+
+
+f7 <- ggplot(wind_cn_ac0.9_k2.5, aes(x = d0, y = d, z = mean_trade_change)) + 
+  geom_contour_filled() + 
+  labs(title = "Annual offset trade volume (million USD/project)",
+       x = "additional proportion (d)", y = "crediting rate (b)", fill = "diff in revenue (MUSD)") +
+  theme_bw()
+f7
+ggsave("./Figures/f_add_cred_trade.pdf", plot = f7, width = 6.8, height = 4.8, dpi = 300)
+
+f8 <- ggplot(wind_cn_ac0.9_k2.5, aes(x = d0, y = d, z = mean_emis_red_change)) + 
+  geom_contour_filled() + 
+  labs(title = "Annual carbon emissions reduction (tCO2e/project)",
+       x = "additional proportion (d)", y = "crediting rate (b)", fill = "diff in emissions reduction") +
+  theme_bw()
+f8
+ggsave("./Figures/f_add_cred_emis.pdf", plot = f8, width = 6.8, height = 4.8, dpi = 300)
+
+
+f9 <- ggplot(wind_cn_sd, aes(x = sdR, y = d, z = mean_trade_change)) + 
+  geom_contour_filled() + 
+  labs(title = "Annual offset trade volume (million USD/project)",
+       x = "context heterogeneity (sd)", y = "crediting rate (b)", fill = "diff in revenue (MUSD)") +
+  theme_bw()
+f9
+ggsave("./Figures/f_heter_cred_trade.pdf", plot = f9, width = 6.8, height = 4.8, dpi = 300)
+
+f10 <- ggplot(wind_cn_sd, aes(x = sdR, y = d, z = mean_emis_red_change)) + 
+  geom_contour_filled() + 
+  labs(title = "Annual carbon emissions reduction (tCO2e/project)",
+       x = "context heterogeneity (sd)", y = "crediting rate (b)", fill = "diff in emissions reduction") +
+  theme_bw()
+f10
+ggsave("./Figures/f_heter_cred_emis.pdf", plot = f10, width = 6.8, height = 4.8, dpi = 300)
+
+
+```
+
+
+# Overcrediting
+To simulate systematic over-crediting, we introduce an exogenous variable to the baseline scenario, representing a fraction of over-crediting. The over-crediting of projects can also arise from overestimation of carbon emissions reduction, as a result of inaccurate baselines and methodologies during the developmental/validation stages and tremendously harm the carbon offsetting mechanism if not addressed properly. Here, we assume a certain share of CERs are not real, i.e they are over-issued CERs, ranging between 0% (no over-issued CERs) and 100% (all CERs are over-issued). 
+
+```{r overcrediting}
+
+set.seed("5201314")
+
+mean_R <- 6.2
+sd_R <- 0.57
+
+mean_F <- 2.81
+sd_F <- 0.54
+
+mean_IC <- 66
+sd_IC <- 12
+
+mean_P <- 12.5
+sd_P <- 1
+
+MW <- 50
+yrs <- 7
+
+#the number of projects
+n = 10000
+
+# Define the ranges and steps for k and d0
+overcrediting_values <- seq(0, 1, by = 0.1)
+
+# Initialize a data frame to store results
+overcrediting <- expand.grid(overcrediting = overcrediting_values)
+overcrediting$d0 <- 0.5
+overcrediting$mean_built_change <- NA
+overcrediting$Trade0 <- NA
+overcrediting$Trade1 <- NA
+overcrediting$EmisRed0 <- NA
+overcrediting$EmisRed1 <- NA
+overcrediting$EmisRedperMUS0 <- NA
+overcrediting$EmisRedperMUS1 <- NA
+overcrediting$mean_trade_change <- NA
+overcrediting$mean_emis_red_change <- NA
+overcrediting$emis_red_per_tradeMUS <- NA
+
+for (overcrediting_val in overcrediting_values) {
+  
+corr_RF <- -0.3
+corr_RP <- -0.15
+corr_FP <- 0.2
+cov_matrix <- matrix(c(sd_R^2, corr_RF * sd_R * sd_F, corr_RP * sd_R * sd_P,
+                       corr_RF * sd_R * sd_F, sd_F^2, corr_FP * sd_F * sd_P,
+                       corr_RP * sd_R * sd_P, corr_FP * sd_F * sd_P, sd_P^2),
+                     nrow = 3)
+group1 <- mvrnorm(n, c(mean_R, mean_F, mean_P), cov_matrix)
+group1 <- as.data.frame(group1)
+colnames(group1) <- c("R", "FR", "P")
+
+group1$Rbar <- 8
+group1$MW <- 50
+group1$yrs <- 7
+group1$IC <- rnorm(n,mean_IC,sd_IC)
+
+group1$d0 <- 0.5
+group1$d1 <- group1$d0
+group1$bias <- group1$Rbar - quantile(group1$R, probs = group1$d0)
+group1$RR <- group1$R + group1$bias
+group1$RplusF <- group1$R + group1$FR
+
+group1$CF <- (group1$IC*group1$R/100)/(1-(1+group1$R/100)^(-group1$yrs))
+
+group1$RealCF <- (group1$IC*group1$RR/100)/(1-(1+group1$RR/100)^(-group1$yrs))
+
+group1$CFplusCER <- (group1$IC*group1$RplusF/100)/(1-(1+group1$RplusF/100)^(-group1$yrs))
+
+group1$CER <- group1$CFplusCER - group1$CF
+
+group1$RealCFplusCER <- group1$RealCF + group1$CER
+hist(group1$RealCFplusCER)
+
+group1$CO2Red <- group1$CER*10^6/group1$P
+group1$RealCO2Red <- group1$CO2Red*(1-overcrediting_val)
+
+group1$CER_d <- group1$CER*group1$d1
+group1$RealCFplusCER_d <- group1$RealCF + group1$CER_d
+
+group1$registrationfee <- calculate_registration_fee(group1$CO2Red)/10^6
+summary(group1$registrationfee)
+
+group1$developmentalfee <- 50000/10^6
+group1$validationfee <- 30000/10^6
+group1$totalfee <- group1$developmentalfee + group1$validationfee + group1$registrationfee
+summary(group1$totalfee)
+
+
+# Apply the IRR function to each row
+group1$RRplusF <- apply(group1, 1, function(x) {
+  tryCatch({
+    calculate_IRR(x['IC'], x['RealCFplusCER'], x['yrs'])
+  }, error = function(e) NA) # Return NA in case of error
+})
+
+group1$RRplusFnew <- apply(group1, 1, function(x) {
+  tryCatch({
+    calculate_IRR(x['IC'], x['RealCFplusCER_d'], x['yrs'])
+  }, error = function(e) NA) # Return NA in case of error
+})
+
+group1$AcceptRate <- 0.9
+group1$R0 <- quantile(group1$RR, probs = group1$AcceptRate) #8.73%
+group1$R0 <- quantile(group1$RR, probs = group1$AcceptRate)
+
+group1$add <- 0
+group1$add[group1$RR < group1$Rbar] <- 1
+describe(group1$add)
+
+group1$k <- 2.5
+group1$q <- 1 - 1/(1+exp(-group1$k*(group1$RR - group1$R0)))
+group1$pvCER <- (group1$CER*100)*(1-(1+group1$Rbar/100)^(-group1$yrs))/group1$Rbar
+group1$pvCER_d <- (group1$CER_d*100)*(1-(1+group1$Rbar/100)^(-group1$yrs))/group1$Rbar
+
+summary(group1$pvCER)
+
+group1$s = ifelse(group1$pvCER*group1$q>group1$totalfee,
+                  ifelse(group1$RRplusF>group1$Rbar, 1, 0),
+                  0)
+summary(group1$s)
+
+group1$s1 = ifelse(group1$pvCER_d>group1$validationfee,
+                   ifelse(group1$RRplusFnew>group1$Rbar, 1, 0),
+                   0)
+summary(group1$s1)
+table(group1$add,group1$s1)
+
+group1$ac <- ifelse(runif(nrow(group1)) < group1$q, 1, 0)
+group1$ac[group1$s == 0] <- 0
+
+table(group1$add,group1$ac)
+
+group1$Type0[group1$s == 0 & group1$add == 0] <- "Non-offset"
+group1$Type0[group1$s == 0 & group1$add == 1] <- "Unattractive"
+group1$Type0[group1$s == 1 & group1$add == 1 & group1$ac == 1] <- "Rightly accepted"
+group1$Type0[group1$s == 1 & group1$add == 0 & group1$ac == 1] <- "Falsely accepted"
+group1$Type0[group1$s == 1 & group1$add == 1 & group1$ac == 0] <- "Falsely rejected"
+group1$Type0[group1$s == 1 & group1$add == 0 & group1$ac == 0] <- "Rightly rejected"
+
+table(group1$Type0)
+
+
+group1$Type1[group1$add == 0 & group1$s1 == 1] <- "Falsely accepted"
+group1$Type1[group1$add == 1 & group1$s1 == 1] <- "Rightly accepted"
+group1$Type1[group1$add == 1 & group1$s1 == 0] <- "Unattractive"
+
+table(group1$Type1)
+
+group1$Built0 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted",
+                                           "Non-offset","Rightly rejected"),1,0)
+group1$Built1 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),1,0)
+group1$BuiltChange = mean(group1$Built1) - mean(group1$Built0)
+
+group1$Invest0 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted",
+                                            "Non-offset","Rightly rejected"),group1$IC,0)
+group1$Invest1 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),group1$IC,0)
+group1$InvestChange = mean(group1$Invest1) - mean(group1$Invest0)
+
+
+group1$Trade0 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),group1$CER,0)
+group1$Trade1 = ifelse(group1$Type0 %in% c("Rightly accepted","Falsely accepted"),group1$CER_d,0)
+mean(group1$Trade0)
+mean(group1$Trade1)
+group1$TradeChange = mean(group1$Trade1) - mean(group1$Trade0)
+summary(group1$TradeChange)
+
+group1$EmisRed0 <- ifelse(group1$Type0 %in% c("Rightly accepted"),
+                          group1$RealCO2Red,
+                          ifelse(group1$Type0 %in% c("Falsely accepted"), 
+                                 -group1$CO2Red,0))
+mean(group1$EmisRed0)
+group1$EmisRed1 <- ifelse(group1$Type1 %in% c("Rightly accepted"),
+                          group1$RealCO2Red,
+                          ifelse(group1$Type1 %in% c("Falsely accepted"), 
+                                 -group1$CO2Red*group1$d1,0))
+mean(group1$EmisRed1)
+group1$EmisRedChange = mean(group1$EmisRed1) - mean(group1$EmisRed0)
+
+group1$EmisRedperMUS0 <- sum(group1$EmisRed0)/sum(group1$Trade0)
+group1$EmisRedperMUS1 <- sum(group1$EmisRed1)/sum(group1$Trade1)
+group1$EmisRedperMUSChange <- group1$EmisRedperMUS1 - group1$EmisRedperMUS0
+
+# Example: Store the mean of BuiltChange and EmisRedChange for the current combination
+overcrediting[overcrediting$overcrediting == overcrediting_val, "bias"] <- mean(group1$bias)
+overcrediting[overcrediting$overcrediting == overcrediting_val, "mean_built_change"] <- mean(group1$BuiltChange)
+overcrediting[overcrediting$overcrediting == overcrediting_val, "Trade0"] <- mean(group1$Trade0)
+overcrediting[overcrediting$overcrediting == overcrediting_val, "Trade1"] <- mean(group1$Trade1)
+overcrediting[overcrediting$overcrediting == overcrediting_val, "EmisRed0"] <- mean(group1$EmisRed0)
+overcrediting[overcrediting$overcrediting == overcrediting_val, "EmisRed1"] <- mean(group1$EmisRed1)
+overcrediting[overcrediting$overcrediting == overcrediting_val, "EmisRedperMUS0"] <- mean(group1$EmisRedperMUS0)
+overcrediting[overcrediting$overcrediting == overcrediting_val, "EmisRedperMUS1"] <- mean(group1$EmisRedperMUS1)
+overcrediting[overcrediting$overcrediting == overcrediting_val, "mean_trade_change"] <- mean(group1$TradeChange)
+overcrediting[overcrediting$overcrediting == overcrediting_val, "mean_trade_change"] <- mean(group1$TradeChange)
+overcrediting[overcrediting$overcrediting == overcrediting_val, "mean_emis_red_change"] <- mean(group1$EmisRedChange)
+overcrediting[overcrediting$overcrediting == overcrediting_val, "emis_red_per_tradeMUS"] <- mean(group1$EmisRedperMUSChange)
+
+}
+
+# View the results
+print(overcrediting)
+
+write_rds(overcrediting, "./Data/simulation/results_overcrediting.rds")
+
+
+overcrediting <- read_rds("./Data/simulation/results_overcrediting.rds")
+
+overcrediting1 <- overcrediting %>% 
+  dplyr::select(overcrediting, Trade0, Trade1)
+overcrediting_melt1 <- melt(overcrediting1, id.vars = "overcrediting")
+
+overcrediting2 <- overcrediting %>% 
+  dplyr::select(overcrediting, EmisRed1, EmisRed0)
+overcrediting_melt2 <- melt(overcrediting2, id.vars = "overcrediting")
+
+overcrediting3 <- overcrediting %>% 
+  dplyr::select(overcrediting, EmisRedperMUS1, EmisRedperMUS0)
+overcrediting_melt3 <- melt(overcrediting3, id.vars = "overcrediting")
+
+
+# Plot with labels
+f11 <- ggplot(overcrediting_melt1, aes(x = overcrediting, y = value, color = variable)) +
+  geom_line(aes(linetype = variable)) +  # Draw lines
+  geom_point() +  # Add points
+  scale_color_manual(values = c("Trade0" = "blue", "Trade1" = "red"), 
+                     labels = c("Trade0" = "current regime", "Trade1" = "proposed regime")) +
+  scale_linetype_manual(values = c("Trade0" = "solid", "Trade1" = "dashed"), 
+                        labels = c("Trade0" = "current regime", "Trade1" = "proposed regime")) +
+  scale_y_continuous(
+    limits = c(0, 1)
+  ) +
+  labs(title = "The effect of over-crediting on market size",
+       x = "Over-crediting fraction", 
+       y = "Annual trade volume (million USD/project)", 
+       color = "Regime", 
+       linetype = "Regime") +
+  theme_bw()
+f11
+ggsave("./Figures/f_overcrediting_trade.pdf", plot = f11, width = 6.8, height = 4.8, dpi = 300)
+
+
+f12 <- ggplot(overcrediting_melt2, aes(x = overcrediting, y = value, color = variable)) +
+  geom_line(aes(linetype = variable)) +  # Draw lines
+  geom_point() +  # Add points
+  scale_color_manual(values = c("EmisRed0" = "blue", "EmisRed1" = "red"), 
+                     labels = c("EmisRed0" = "current regime", "EmisRed1" = "proposed regime")) +
+  scale_linetype_manual(values = c("EmisRed0" = "solid", "EmisRed1" = "dashed"), 
+                        labels = c("EmisRed0" = "current regime", "EmisRed1" = "proposed regime")) +
+  labs(title = "The effect of over-crediting on climate mitigation",
+       x = "Over-crediting fraction", 
+       y = "Annual carbon reduction (tCO2/project)", 
+       color = "Regime", 
+       linetype = "Regime") +
+  theme_bw()
+f12
+ggsave("./Figures/f_overcrediting_emis.pdf", plot = f12, width = 6.8, height = 4.8, dpi = 300)
+
+
+f13 <- ggplot(overcrediting_melt3, aes(x = overcrediting, y = value, color = variable)) +
+  geom_line(aes(linetype = variable)) +  # Draw lines
+  geom_point() +  # Add points
+  scale_color_manual(values = c("EmisRedperMUS0" = "blue", "EmisRedperMUS1" = "red"), 
+                     labels = c("EmisRedperMUS0" = "current regime", "EmisRedperMUS1" = "proposed regime")) +
+  scale_linetype_manual(values = c("EmisRedperMUS0" = "solid", "EmisRedperMUS1" = "dashed"), 
+                        labels = c("EmisRedperMUS0" = "current regime", "EmisRedperMUS1" = "proposed regime")) +
+  labs(title = "The effect of over-crediting on climate mitigation efficiency",
+       x = "Over-crediting fraction", 
+       y = "Annual carbon reduction (tCO2/million USD/project)", 
+       color = "Regime", 
+       linetype = "Regime") +
+  theme_bw()
+f13
+ggsave("./Figures/f_overcrediting_emis_efficiency.pdf", plot = f13, width = 6.8, height = 4.8, dpi = 300)
+
+```
+
+All the codes are presented above.
+
+
+
